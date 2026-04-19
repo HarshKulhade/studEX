@@ -1,0 +1,46 @@
+{
+  "name": "student-super-app-backend",
+  "version": "1.0.0",
+  "description": "Hyperlocal student super-platform backend for Indian college students",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  },
+  "keywords": [
+    "student",
+    "platform",
+    "india",
+    "hyperlocal",
+    "deals",
+    "cashback"
+  ],
+  "author": "Student Super App Team",
+  "license": "MIT",
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cloudinary": "^1.41.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "express-rate-limit": "^7.3.1",
+    "express-validator": "^7.1.0",
+    "firebase-admin": "^13.8.0",
+    "jsonwebtoken": "^9.0.2",
+    "morgan": "^1.10.0",
+    "multer": "^1.4.5-lts.1",
+    "multer-storage-cloudinary": "^4.0.0",
+    "nodemailer": "^6.9.14",
+    "pdf-parse": "^1.1.1",
+    "qrcode": "^1.5.3",
+    "razorpay": "^2.9.6",
+    "socket.io": "^4.7.5",
+    "uuid": "^10.0.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.4"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

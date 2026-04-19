@@ -1,0 +1,327 @@
+'use strict';
+
+const bcrypt = require('bcryptjs');
+const { admin } = require('../config/firebase');
+const User = require('../models/User');
+const Vendor = require('../models/Vendor');
+const CashbackWallet = require('../models/CashbackWallet');
+const Transaction = require('../models/Transaction');
+const ApiResponse = require('../utils/ApiResponse');
+const { generateVendorToken } = require('../utils/generateToken');
+const { sendVendorRegistrationAlert } = require('../utils/sendEmail');
+
+// ── Helpers ────────────────────────────────────────
+
+/** Credit cashback to a student's wallet and record the transaction. */
+const creditReferralCashback = async (referrerId, amount, referenceId) => {
+  let wallet = await CashbackWallet.findOne({ student: referrerId });
+  if (!wallet) {
+    wallet = await CashbackWallet.create({ student: referrerId });
+  }
+  wallet.balance += amount;
+  wallet.totalEarned += amount;
+  await CashbackWallet.save(wallet);
+
+  await Transaction.create({
+    wallet: wallet._id,
+    student: referrerId,
+    type: 'credit',
+    amount,
+    source: 'referral',
+    referenceId,
+    description: `Referral bonus of ₹${amount} credited`,
+  });
+};
+
+// ─────────────────────────────────────────────────
+//  STUDENT AUTH
+// ─────────────────────────────────────────────────
+
+/**
+ * POST /api/auth/register
+ * Register a new student by verifying Firebase ID Token and creating a Firestore profile.
+ */
+const registerStudent = async (req, res, next) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return ApiResponse.error(res, 401, 'No Firebase token provided.');
+    }
+    const token = authHeader.split(' ')[1];
+
+    let decodedToken;
+    try {
+      decodedToken = await admin.auth().verifyIdToken(token);
+    } catch (err) {
+      return ApiResponse.error(res, 401, 'Invalid Firebase token.');
+    }
+
+    const { name, phone, college, referralCode } = req.body;
+
+    // Check for existing user by Firebase UID
+    let user = await User.findByFirebaseUid(decodedToken.uid);
+    if (user) {
+      return ApiResponse.success(res, 200, 'User already registered. Logging in.', {
+        userId: user._id,
+        email: user.email,
+        isVerified: user.isVerified,
+      });
+    }
+
+    // Check if email or phone already taken
+    const existingByEmail = await User.findByEmail(decodedToken.email);
+    const existingByPhone = phone ? await User.findByPhone(phone) : null;
+    if (existingByEmail || existingByPhone) {
+      return ApiResponse.error(res, 409, 'An account with this email/phone already exists in the system.');
+    }
+
+    let referrer = null;
+    if (referralCode) {
+      referrer = await User.findByReferralCode(referralCode);
+    }
+
+    user = await User.create({
+      firebaseUid: decodedToken.uid,
+      name,
+      email: decodedToken.email,
+      phone,
+      college,
+      referredBy: referrer ? referrer._id : null,
+      isVerified: decodedToken.email_verified || false,
+    });
+
+    return ApiResponse.success(res, 201, 'Registration successful.', {
+      userId: user._id,
+      email: user.email,
+      isVerified: user.isVerified,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * POST /api/auth/login
+ * Student login. Uses Firebase token.
+ */
+const loginStudent = async (req, res, next) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return ApiResponse.error(res, 401, 'No Firebase token provided.');
+    }
+    const token = authHeader.split(' ')[1];
+
+    let decodedToken;
+    try {
+      decodedToken = await admin.auth().verifyIdToken(token);
+    } catch (err) {
+      return ApiResponse.error(res, 401, 'Invalid Firebase token.');
+    }
+
+    const user = await User.findByFirebaseUid(decodedToken.uid);
+    if (!user) {
+      return ApiResponse.error(res, 404, 'No account found. Please register.');
+    }
+
+    // Sync isVerified from Firebase
+    if (decodedToken.email_verified && !user.isVerified) {
+      await User.findByIdAndUpdate(user._id, { isVerified: true });
+      user.isVerified = true;
+    }
+
+    return ApiResponse.success(res, 200, 'Login successful', {
+      user: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        college: user.college,
+        phone: user.phone,
+        isVerified: user.isVerified,
+        verificationStatus: user.verificationStatus,
+        referralCode: user.referralCode,
+        ambassadorTier: user.ambassadorTier,
+        avatarUrl: user.avatarUrl,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ─────────────────────────────────────────────────
+//  VENDOR AUTH
+// ─────────────────────────────────────────────────
+
+/**
+ * POST /api/auth/vendor/register
+ */
+const registerVendor = async (req, res, next) => {
+  try {
+    const { ownerName, businessName, email, phone, password, category, address, lng, lat } = req.body;
+
+    const existingByEmail = await Vendor.findByEmail(email);
+    const existingByPhone = await Vendor.findByPhone(phone);
+    if (existingByEmail || existingByPhone) {
+      return ApiResponse.error(
+        res,
+        409,
+        existingByEmail
+          ? 'A vendor account with this email already exists.'
+          : 'A vendor account with this phone number already exists.'
+      );
+    }
+
+    const passwordHash = await bcrypt.hash(password, 12);
+    const coordinates = [parseFloat(lng) || 0, parseFloat(lat) || 0];
+
+    const vendor = await Vendor.create({
+      ownerName,
+      businessName,
+      email,
+      phone,
+      passwordHash,
+      category,
+      address,
+      location: { type: 'Point', coordinates },
+    });
+
+    // Notify admin (non-blocking)
+    const adminEmail = process.env.EMAIL_USER;
+    if (adminEmail) {
+      try {
+        await sendVendorRegistrationAlert(adminEmail, { businessName, ownerName, email, phone });
+      } catch (_err) {
+        // Non-critical
+      }
+    }
+
+    return ApiResponse.success(
+      res,
+      201,
+      'Vendor registration submitted. Your account will be reviewed and approved within 24-48 hours.',
+      { vendorId: vendor._id, businessName: vendor.businessName }
+    );
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * POST /api/auth/vendor/login
+ */
+const loginVendor = async (req, res, next) => {
+  try {
+    const { email, password } = req.body;
+
+    const vendor = await Vendor.findByEmail(email);
+    if (!vendor) {
+      return ApiResponse.error(res, 401, 'Invalid email or password.');
+    }
+
+    const isMatch = await bcrypt.compare(password, vendor.passwordHash);
+    if (!isMatch) {
+      return ApiResponse.error(res, 401, 'Invalid email or password.');
+    }
+
+    if (!vendor.isApproved) {
+      return ApiResponse.error(res, 403, 'Your account is pending admin approval. Please wait 24-48 hours.');
+    }
+
+    const token = generateVendorToken(vendor._id);
+
+    return ApiResponse.success(res, 200, 'Vendor login successful', {
+      token,
+      vendor: {
+        _id: vendor._id,
+        businessName: vendor.businessName,
+        ownerName: vendor.ownerName,
+        email: vendor.email,
+        category: vendor.category,
+        isApproved: vendor.isApproved,
+        listingTier: vendor.listingTier,
+        rating: vendor.rating,
+        logoUrl: vendor.logoUrl,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ─────────────────────────────────────────────────
+//  PASSWORD RESET (vendor only — students use Firebase)
+// ─────────────────────────────────────────────────
+
+const forgotPassword = async (req, res, next) => {
+  try {
+    const { email, role } = req.body;
+
+    let account;
+    if (role === 'vendor') {
+      account = await Vendor.findByEmail(email);
+    } else {
+      // Students use Firebase password reset — just return success
+      return ApiResponse.success(res, 200, 'If an account with this email exists, a reset link has been sent via Firebase.');
+    }
+
+    if (!account) {
+      return ApiResponse.success(res, 200, 'If an account with this email exists, a reset OTP has been sent.');
+    }
+
+    // Generate OTP
+    const otp = String(Math.floor(100000 + Math.random() * 900000));
+    const otpExpiry = new Date(Date.now() + 10 * 60 * 1000);
+
+    await Vendor.findByIdAndUpdate(account._id, { otp, otpExpiry });
+
+    const { sendOTPEmail } = require('../utils/sendEmail');
+    await sendOTPEmail(email, otp, account.ownerName || 'Vendor');
+
+    return ApiResponse.success(res, 200, 'If an account with this email exists, a reset OTP has been sent.');
+  } catch (err) {
+    next(err);
+  }
+};
+
+const resetPassword = async (req, res, next) => {
+  try {
+    const { email, otp, newPassword, role } = req.body;
+
+    let account;
+    if (role === 'vendor') {
+      account = await Vendor.findByEmail(email);
+    } else {
+      return ApiResponse.error(res, 400, 'Students reset passwords via Firebase. Use the Firebase password reset flow.');
+    }
+
+    if (!account) {
+      return ApiResponse.error(res, 404, 'No account found with this email address.');
+    }
+
+    if (!account.otp || account.otp !== otp) {
+      return ApiResponse.error(res, 400, 'Invalid OTP.');
+    }
+
+    const otpExpiry = account.otpExpiry instanceof Date ? account.otpExpiry : account.otpExpiry.toDate();
+    if (new Date() > otpExpiry) {
+      return ApiResponse.error(res, 400, 'OTP has expired. Please request a new one.');
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 12);
+    await Vendor.findByIdAndUpdate(account._id, { passwordHash, otp: null, otpExpiry: null });
+
+    return ApiResponse.success(res, 200, 'Password reset successful. Please log in with your new password.');
+  } catch (err) {
+    next(err);
+  }
+};
+
+module.exports = {
+  registerStudent,
+  loginStudent,
+  registerVendor,
+  loginVendor,
+  forgotPassword,
+  resetPassword,
+};

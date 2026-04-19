@@ -1,0 +1,37 @@
+'use strict';
+
+const express = require('express');
+const router = express.Router();
+const { protectAdmin } = require('../middleware/adminAuth');
+const {
+  getStats,
+  getAllDeals,
+  adminCreateDeal,
+  adminUpdateDeal,
+  adminDeleteDeal,
+  getAllUsers,
+  getAllOpportunities,
+  adminCreateOpportunity,
+  adminDeleteOpportunity,
+} = require('../controllers/admin.controller');
+
+// All admin routes require admin auth
+router.use(protectAdmin);
+
+router.get('/stats', getStats);
+
+// Deals
+router.get('/deals', getAllDeals);
+router.post('/deals', adminCreateDeal);
+router.put('/deals/:id', adminUpdateDeal);
+router.delete('/deals/:id', adminDeleteDeal);
+
+// Users
+router.get('/users', getAllUsers);
+
+// Opportunities
+router.get('/opportunities', getAllOpportunities);
+router.post('/opportunities', adminCreateOpportunity);
+router.delete('/opportunities/:id', adminDeleteOpportunity);
+
+module.exports = router;
