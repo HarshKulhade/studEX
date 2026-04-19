@@ -8,7 +8,7 @@ import {
 } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 
-const API = 'http://localhost:5001/api/admin';
+const API = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001').replace(/\/+$/, '') + '/api/admin';
 const ADMIN_EMAIL = 'harshkulhade95@gmail.com';
 
 interface Deal {
@@ -40,7 +40,11 @@ interface User {
   _id: string;
   name: string;
   email: string;
+  phone?: string;
   college?: string;
+  avatarUrl?: string;
+  collegeIdImageUrl?: string;
+  isVerified: boolean;
   verificationStatus: string;
 }
 
@@ -82,6 +86,8 @@ export default function AdminPage() {
   const [showOppForm, setShowOppForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState('');
+  const [previewImg, setPreviewImg] = useState<string | null>(null);
+  const [verifyingUser, setVerifyingUser] = useState<string | null>(null);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (user) => {
@@ -514,20 +520,183 @@ export default function AdminPage() {
         {/* ── USERS TAB ── */}
         {tab === 'users' && (
           <div className="space-y-4">
-            <h2 className="font-bold text-lg">Registered Users ({users.length})</h2>
-            <div className="space-y-2">
+            <div className="flex justify-between items-center">
+              <h2 className="font-bold text-lg">Registered Users ({users.length})</h2>
+              <div className="flex gap-2 text-xs font-mono">
+                <span className="text-amber">{users.filter(u => u.verificationStatus === 'pending').length} pending</span>
+                <span className="text-white/20">·</span>
+                <span className="text-green-400">{users.filter(u => u.verificationStatus === 'verified').length} verified</span>
+              </div>
+            </div>
+            <div className="space-y-3">
               {users.length === 0 && <p className="text-white/40 text-sm">No users found.</p>}
-              {users.map(u => (
-                <div key={u._id} className="bg-[#1a1a1a] border border-white/10 rounded-xl px-5 py-4 flex justify-between items-center gap-4">
-                  <div>
-                    <p className="font-bold text-sm">{u.name}</p>
-                    <p className="text-white/40 text-xs">{u.email} · {u.college || '—'}</p>
+              {/* Show pending users first */}
+              {[...users].sort((a, b) => {
+                const order: Record<string, number> = { pending: 0, unverified: 1, rejected: 2, verified: 3 };
+                return (order[a.verificationStatus] ?? 4) - (order[b.verificationStatus] ?? 4);
+              }).map(u => (
+                <div key={u._id} className={`bg-[#1a1a1a] border rounded-2xl overflow-hidden transition-all ${
+                  u.verificationStatus === 'pending' ? 'border-amber/40' :
+                  u.verificationStatus === 'rejected' ? 'border-red-500/30' :
+                  u.verificationStatus === 'verified' ? 'border-green-500/20' :
+                  'border-white/10'
+                }`}>
+                  {/* User header row */}
+                  <div className="px-5 py-4 flex items-center gap-4">
+                    {/* Avatar */}
+                    <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white font-bold text-sm flex-shrink-0 overflow-hidden border border-white/10">
+                      {u.avatarUrl ? (
+                        <img src={u.avatarUrl} alt={u.name} className="w-full h-full object-cover" />
+                      ) : (
+                        <span>{u.name?.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}</span>
+                      )}
+                    </div>
+                    {/* Info */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="font-bold text-sm">{u.name}</p>
+                        <span className={`font-mono text-[10px] uppercase px-2 py-0.5 rounded-full ${
+                          u.verificationStatus === 'verified' ? 'bg-green-900/50 text-green-400' :
+                          u.verificationStatus === 'pending' ? 'bg-amber/20 text-amber' :
+                          u.verificationStatus === 'rejected' ? 'bg-red-900/40 text-red-400' :
+                          'bg-white/10 text-white/40'
+                        }`}>{u.verificationStatus}</span>
+                      </div>
+                      <p className="text-white/40 text-xs mt-0.5 truncate">{u.email}{u.phone ? ` · ${u.phone}` : ''}{u.college ? ` · ${u.college}` : ''}</p>
+                    </div>
+                    {/* Quick verify/reject for pending */}
+                    {u.verificationStatus === 'pending' && !u.collegeIdImageUrl && (
+                      <div className="flex gap-2 flex-shrink-0">
+                        <button
+                          disabled={verifyingUser === u._id}
+                          onClick={async () => {
+                            setVerifyingUser(u._id);
+                            try {
+                              await apiFetch(`/users/${u._id}/verify`, { method: 'PUT', body: JSON.stringify({ action: 'verify' }) });
+                              setMsg('✅ User verified!');
+                              await load();
+                            } catch (err: any) { setMsg(`❌ ${err.message}`); }
+                            finally { setVerifyingUser(null); }
+                          }}
+                          className="bg-green-900/40 hover:bg-green-900/60 text-green-400 px-3 py-1.5 rounded-lg text-xs font-bold"
+                        >
+                          Verify
+                        </button>
+                        <button
+                          disabled={verifyingUser === u._id}
+                          onClick={async () => {
+                            setVerifyingUser(u._id);
+                            try {
+                              await apiFetch(`/users/${u._id}/verify`, { method: 'PUT', body: JSON.stringify({ action: 'reject' }) });
+                              setMsg('❌ User rejected');
+                              await load();
+                            } catch (err: any) { setMsg(`❌ ${err.message}`); }
+                            finally { setVerifyingUser(null); }
+                          }}
+                          className="bg-red-900/30 hover:bg-red-900/60 text-red-400 px-3 py-1.5 rounded-lg text-xs font-bold"
+                        >
+                          Reject
+                        </button>
+                      </div>
+                    )}
+                    {u.verificationStatus === 'verified' && (
+                      <span className="material-symbols-outlined text-green-400 text-xl flex-shrink-0">verified</span>
+                    )}
+                    {u.verificationStatus === 'rejected' && (
+                      <button
+                        disabled={verifyingUser === u._id}
+                        onClick={async () => {
+                          setVerifyingUser(u._id);
+                          try {
+                            await apiFetch(`/users/${u._id}/verify`, { method: 'PUT', body: JSON.stringify({ action: 'verify' }) });
+                            setMsg('✅ User verified!');
+                            await load();
+                          } catch (err: any) { setMsg(`❌ ${err.message}`); }
+                          finally { setVerifyingUser(null); }
+                        }}
+                        className="bg-green-900/40 hover:bg-green-900/60 text-green-400 px-3 py-1.5 rounded-lg text-xs font-bold flex-shrink-0"
+                      >
+                        Re-verify
+                      </button>
+                    )}
                   </div>
-                  <span className={`font-mono text-[10px] uppercase px-2 py-1 rounded-full ${
-                    u.verificationStatus === 'verified' ? 'bg-green-900/50 text-green-400' :
-                    u.verificationStatus === 'pending' ? 'bg-amber/20 text-amber' :
-                    'bg-white/10 text-white/40'
-                  }`}>{u.verificationStatus}</span>
+
+                  {/* Document preview section — shown if user uploaded a college ID */}
+                  {u.collegeIdImageUrl && (
+                    <div className={`border-t px-5 py-4 ${
+                      u.verificationStatus === 'pending' ? 'border-amber/20 bg-amber/5' :
+                      'border-white/5 bg-white/[0.02]'
+                    }`}>
+                      <p className="font-mono text-[10px] uppercase tracking-widest text-white/40 mb-3">
+                        <span className="material-symbols-outlined text-amber text-sm align-middle mr-1">badge</span>
+                        Uploaded College ID / Enrollment Letter
+                      </p>
+                      <div className="flex items-start gap-4">
+                        {/* Thumbnail */}
+                        <button
+                          onClick={() => setPreviewImg(u.collegeIdImageUrl!)}
+                          className="group relative w-32 h-24 rounded-lg overflow-hidden bg-white/5 border border-white/10 flex-shrink-0 hover:border-amber/50 transition-colors"
+                        >
+                          <img
+                            src={u.collegeIdImageUrl}
+                            alt="College ID"
+                            className="w-full h-full object-cover"
+                          />
+                          <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                            <span className="material-symbols-outlined text-white text-2xl">zoom_in</span>
+                          </div>
+                        </button>
+                        {/* Actions */}
+                        <div className="flex flex-col gap-2">
+                          <a
+                            href={u.collegeIdImageUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1.5 bg-white/5 hover:bg-white/10 border border-white/10 px-3 py-2 rounded-lg text-xs text-white/70 hover:text-white transition-colors"
+                          >
+                            <span className="material-symbols-outlined text-sm">open_in_new</span>
+                            Open Full Size
+                          </a>
+                          {u.verificationStatus === 'pending' && (
+                            <div className="flex gap-2">
+                              <button
+                                disabled={verifyingUser === u._id}
+                                onClick={async () => {
+                                  setVerifyingUser(u._id);
+                                  try {
+                                    await apiFetch(`/users/${u._id}/verify`, { method: 'PUT', body: JSON.stringify({ action: 'verify' }) });
+                                    setMsg('✅ User verified!');
+                                    await load();
+                                  } catch (err: any) { setMsg(`❌ ${err.message}`); }
+                                  finally { setVerifyingUser(null); }
+                                }}
+                                className="bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors"
+                              >
+                                <span className="material-symbols-outlined text-sm">check_circle</span>
+                                {verifyingUser === u._id ? 'Processing…' : 'Verify Student'}
+                              </button>
+                              <button
+                                disabled={verifyingUser === u._id}
+                                onClick={async () => {
+                                  setVerifyingUser(u._id);
+                                  try {
+                                    await apiFetch(`/users/${u._id}/verify`, { method: 'PUT', body: JSON.stringify({ action: 'reject' }) });
+                                    setMsg('❌ User rejected');
+                                    await load();
+                                  } catch (err: any) { setMsg(`❌ ${err.message}`); }
+                                  finally { setVerifyingUser(null); }
+                                }}
+                                className="bg-red-900/60 hover:bg-red-900/80 text-red-300 px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors"
+                              >
+                                <span className="material-symbols-outlined text-sm">cancel</span>
+                                Reject
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -535,6 +704,39 @@ export default function AdminPage() {
         )}
 
       </div>
+
+      {/* Image Preview Modal */}
+      {previewImg && (
+        <div
+          className="fixed inset-0 bg-black/80 z-[100] flex items-center justify-center p-6 cursor-pointer"
+          onClick={() => setPreviewImg(null)}
+        >
+          <div className="relative max-w-4xl max-h-[90vh] w-full" onClick={e => e.stopPropagation()}>
+            <button
+              onClick={() => setPreviewImg(null)}
+              className="absolute -top-3 -right-3 bg-white/10 hover:bg-white/20 text-white w-8 h-8 rounded-full flex items-center justify-center z-10"
+            >
+              ✕
+            </button>
+            <img
+              src={previewImg}
+              alt="Document Preview"
+              className="w-full h-auto max-h-[85vh] object-contain rounded-xl border border-white/10"
+            />
+            <div className="mt-3 text-center">
+              <a
+                href={previewImg}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 text-amber text-sm hover:underline"
+              >
+                <span className="material-symbols-outlined text-sm">open_in_new</span>
+                Open in new tab
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

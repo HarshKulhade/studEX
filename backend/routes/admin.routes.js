@@ -10,6 +10,7 @@ const {
   adminUpdateDeal,
   adminDeleteDeal,
   getAllUsers,
+  adminVerifyUser,
   getAllOpportunities,
   adminCreateOpportunity,
   adminDeleteOpportunity,
@@ -28,6 +29,7 @@ router.delete('/deals/:id', adminDeleteDeal);
 
 // Users
 router.get('/users', getAllUsers);
+router.put('/users/:id/verify', adminVerifyUser);
 
 // Opportunities
 router.get('/opportunities', getAllOpportunities);

@@ -125,15 +125,17 @@ const getDashboard = async (req, res, next) => {
       PrintJob.find({ student: studentId }, { limit: 5 }),
     ]);
 
-    // Count nearby active deals using geoFilter (post-fetch filtering)
-    let nearbyDealsCount = 0;
+    // Count active deals, falling back to all active deals if location is not set
+    const activeDeals = await Deal.find({ isActive: true, validUntil: { $gt: new Date() } });
+    let nearbyDealsCount = activeDeals.length; // Default to all if no location
+
     if (
       req.user.location &&
       req.user.location.coordinates &&
-      req.user.location.coordinates[0] !== 0
+      req.user.location.coordinates[0] !== 0 &&
+      req.user.location.coordinates[1] !== 0
     ) {
       const [userLng, userLat] = req.user.location.coordinates;
-      const activeDeals = await Deal.find({ isActive: true, validUntil: { $gt: new Date() } });
       const nearby = filterByRadius(
         activeDeals.map((d) => ({
           ...d,
@@ -141,7 +143,7 @@ const getDashboard = async (req, res, next) => {
         })),
         userLat,
         userLng,
-        2000
+        2000 // 2km radius
       );
       nearbyDealsCount = nearby.length;
     }

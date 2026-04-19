@@ -152,7 +152,18 @@ const getAllUsers = async (req, res, next) => {
     const snap = await db.collection('users').orderBy('createdAt', 'desc').get();
     const users = snap.docs.map(d => {
       const data = d.data();
-      return { _id: d.id, name: data.name, email: data.email, college: data.college, verificationStatus: data.verificationStatus, createdAt: data.createdAt };
+      return {
+        _id: d.id,
+        name: data.name,
+        email: data.email,
+        phone: data.phone || null,
+        college: data.college,
+        avatarUrl: data.avatarUrl || null,
+        collegeIdImageUrl: data.collegeIdImageUrl || null,
+        isVerified: data.isVerified || false,
+        verificationStatus: data.verificationStatus || 'unverified',
+        createdAt: data.createdAt,
+      };
     });
     return ApiResponse.success(res, 200, 'Users fetched', users);
   } catch (err) {
@@ -211,6 +222,47 @@ const adminDeleteOpportunity = async (req, res, next) => {
   }
 };
 
+// ─────────────────────────────────────────────────
+//  PUT /api/admin/users/:id/verify
+// ─────────────────────────────────────────────────
+const adminVerifyUser = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { action } = req.body; // 'verify' or 'reject'
+
+    if (!['verify', 'reject'].includes(action)) {
+      return ApiResponse.error(res, 400, 'Action must be "verify" or "reject".');
+    }
+
+    const userRef = db.collection('users').doc(id);
+    const userSnap = await userRef.get();
+    if (!userSnap.exists) {
+      return ApiResponse.error(res, 404, 'User not found.');
+    }
+
+    const updates = {
+      verificationStatus: action === 'verify' ? 'verified' : 'rejected',
+      isVerified: action === 'verify',
+      updatedAt: new Date(),
+    };
+
+    await userRef.update(updates);
+
+    const updatedSnap = await userRef.get();
+    const data = updatedSnap.data();
+
+    return ApiResponse.success(res, 200, `User ${action === 'verify' ? 'verified' : 'rejected'} successfully.`, {
+      _id: updatedSnap.id,
+      name: data.name,
+      email: data.email,
+      verificationStatus: data.verificationStatus,
+      isVerified: data.isVerified,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = {
   getStats,
   getAllDeals,
@@ -218,6 +270,7 @@ module.exports = {
   adminUpdateDeal,
   adminDeleteDeal,
   getAllUsers,
+  adminVerifyUser,
   getAllOpportunities,
   adminCreateOpportunity,
   adminDeleteOpportunity,
