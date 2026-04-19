@@ -88,6 +88,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const res = await authApi.loginStudent(t) as { data: { user: StudentProfile } };
       if (res?.data?.user) {
         setStudent(res.data.user);
+      } else {
+        // Backend returned no user — clear the stale Firebase session
+        setStudent(null);
+        await signOut(auth);
+        return;
       }
       // Fetch wallet with the fresh token directly
       const walletRes = await fetch(
@@ -99,7 +104,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setWalletBalance(parseFloat(walletData.data.balance));
       }
     } catch {
+      // Backend profile fetch failed (e.g., 404 no account) — sign out stale Firebase session
       setStudent(null);
+      setToken(null);
+      tokenRef.current = null;
+      await signOut(auth);
     }
   }, []);
 

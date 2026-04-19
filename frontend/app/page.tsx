@@ -5,14 +5,16 @@ import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
 
 export default function LandingPage() {
-  const { firebaseUser, loading } = useAuth();
+  const { firebaseUser, student, loading } = useAuth();
   const router = useRouter();
   const [visible, setVisible] = useState(false);
 
   useEffect(() => { setVisible(true); }, []);
   useEffect(() => {
-    if (!loading && firebaseUser) router.push('/dashboard');
-  }, [firebaseUser, loading, router]);
+    // Only redirect if we have both a Firebase session AND a confirmed backend profile.
+    // This prevents stale/unknown Firebase sessions from hijacking the landing page.
+    if (!loading && firebaseUser && student) router.push('/dashboard');
+  }, [firebaseUser, student, loading, router]);
 
   if (loading) return null;
 

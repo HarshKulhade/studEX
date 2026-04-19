@@ -5,10 +5,11 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 
 export default function OnboardingPage() {
-  const { firebaseUser, loading } = useAuth();
+  const { firebaseUser, student, loading } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
+    // Only redirect to login if fully loaded and no authenticated session exists
     if (!loading && !firebaseUser) router.push('/login');
   }, [firebaseUser, loading, router]);
 

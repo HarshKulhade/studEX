@@ -11,7 +11,6 @@ import { authApi } from '@/lib/api';
 
 export default function RegisterPage() {
   const router = useRouter();
-  const [step, setStep] = useState<'form' | 'verify'>('form');
   const [form, setForm] = useState({
     name: '',
     email: '',
@@ -34,8 +33,8 @@ export default function RegisterPage() {
     try {
       // 1. Create Firebase account
       const cred = await createUserWithEmailAndPassword(auth, form.email, form.password);
-      // 2. Send verification email
-      await sendEmailVerification(cred.user);
+      // 2. Send verification email (non-blocking — user can verify later)
+      sendEmailVerification(cred.user).catch(() => {});
       // 3. Get token & register profile in backend
       const token = await cred.user.getIdToken();
       await authApi.registerStudent(token, {
@@ -44,7 +43,8 @@ export default function RegisterPage() {
         college: form.college,
         ...(form.referralCode ? { referralCode: form.referralCode } : {}),
       });
-      setStep('verify');
+      // 4. Redirect directly to dashboard
+      router.push('/dashboard');
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Registration failed';
       if (msg.includes('email-already-in-use')) {
@@ -58,27 +58,6 @@ export default function RegisterPage() {
       setLoading(false);
     }
   };
-
-  if (step === 'verify') {
-    return (
-      <div className="min-h-screen bg-[#F7F4EF] flex flex-col items-center justify-center px-8">
-        <div className="max-w-md w-full text-center">
-          <h1 className="font-headline font-black text-5xl uppercase tracking-tighter text-ink mb-6">
-            CHECK YOUR EMAIL
-          </h1>
-          <p className="font-body text-on-surface-variant text-lg mb-12">
-            We&apos;ve sent a verification link to <strong>{form.email}</strong>. Please verify to activate your account.
-          </p>
-          <button
-            onClick={() => router.push('/login')}
-            className="w-full bg-ink text-[#F7F4EF] py-5 rounded-full font-headline uppercase tracking-widest text-lg flex items-center justify-center gap-3 hover:bg-charcoal snappy editorial-shadow"
-          >
-            Go to Login <span className="material-symbols-outlined">arrow_forward</span>
-          </button>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-[#F7F4EF] flex flex-col">
