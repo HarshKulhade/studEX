@@ -1,7 +1,7 @@
 // Central API client for all backend requests
 // Uses Firebase token for student auth, JWT for vendor auth
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001';
+const API_URL = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001').replace(/\/+$/, '');
 
 // ── Generic fetch with Firebase token ──────────────────────────────────────
 
