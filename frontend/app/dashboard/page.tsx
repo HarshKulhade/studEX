@@ -48,22 +48,26 @@ function formatDate(ts: unknown) {
 }
 
 export default function DashboardPage() {
-  const { firebaseUser, student, token, loading, logout, walletBalance } = useAuth();
+  const { firebaseUser, student, token, loading, logout, walletBalance, refreshWallet } = useAuth();
   const router = useRouter();
   const [data, setData] = useState<DashboardData | null>(null);
   const [fetching, setFetching] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
   const loadDashboard = useCallback(async () => {
     if (!token) return;
+    setRefreshing(true);
     try {
       const res = await studentApi.getDashboard(token) as { data: DashboardData };
       setData(res.data);
+      if (refreshWallet) await refreshWallet();
     } catch {
       // silently fail
     } finally {
       setFetching(false);
+      setRefreshing(false);
     }
-  }, [token]);
+  }, [token, refreshWallet]);
 
   useEffect(() => {
     if (!loading && !firebaseUser) router.push('/login');
@@ -101,7 +105,7 @@ export default function DashboardPage() {
           )}
         </div>
         <div className="flex items-center gap-3">
-          <button onClick={loadDashboard} className="w-10 h-10 flex items-center justify-center text-muted hover:text-ink snappy">
+          <button onClick={loadDashboard} className={`w-10 h-10 flex items-center justify-center text-muted hover:text-ink snappy ${refreshing ? 'animate-spin text-ink' : ''}`}>
             <span className="material-symbols-outlined text-xl">refresh</span>
           </button>
           {/* Avatar */}
