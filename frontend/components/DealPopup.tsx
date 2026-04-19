@@ -73,9 +73,15 @@ function discountDescription(deal: DealDetail) {
 function formatDate(ts: unknown) {
   if (!ts) return '—';
   try {
-    const d = (ts as { toDate?: () => Date }).toDate
-      ? (ts as { toDate: () => Date }).toDate()
-      : new Date(ts as string);
+    let d: Date;
+    if ((ts as any).toDate) {
+      d = (ts as any).toDate();
+    } else if (typeof ts === 'object' && ts !== null && '_seconds' in ts) {
+      d = new Date((ts as any)._seconds * 1000);
+    } else {
+      d = new Date(ts as string | number);
+    }
+    if (isNaN(d.getTime())) return '—';
     return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
   } catch {
     return '—';
@@ -157,6 +163,7 @@ export default function DealPopup({ dealId, onClose }: DealPopupProps) {
     cashbackAmount?: number;
   } | null>(null);
   const [claimError, setClaimError] = useState('');
+  const [destinationCode, setDestinationCode] = useState('');
   const [verificationStatus, setVerificationStatus] = useState<string | null>(null);
 
   // QR scanner video ref
@@ -279,8 +286,7 @@ export default function DealPopup({ dealId, onClose }: DealPopupProps) {
     if (claimStep !== 'payment') return;
     stopCamera();
     setScanningQR(false);
-    setClaimStep('processing');
-    await processRedemption(qrData);
+    setDestinationCode(qrData);
   };
 
   /* ─── Claim Flow Logic ─── */
@@ -328,6 +334,7 @@ export default function DealPopup({ dealId, onClose }: DealPopupProps) {
     }
 
     setClaimError('');
+    setDestinationCode('');
     setClaimStep('payment');
     // Also refresh wallet balance
     if (token) refreshWallet();
@@ -401,8 +408,7 @@ export default function DealPopup({ dealId, onClose }: DealPopupProps) {
       setClaimError('Please enter the vendor code.');
       return;
     }
-    setClaimStep('processing');
-    await processRedemption(manualCode.trim());
+    setDestinationCode(manualCode.trim());
   };
 
   /* ─── Computed values ─── */
@@ -730,124 +736,146 @@ export default function DealPopup({ dealId, onClose }: DealPopupProps) {
                       )}
                     </div>
 
-                    {/* QR Scanner */}
-                    <div>
-                      <h4 className="font-headline font-bold text-sm text-ink uppercase tracking-tight mb-3 flex items-center gap-2">
-                        <span className="material-symbols-outlined text-[18px]">qr_code_scanner</span>
-                        Scan Shop QR Code
-                      </h4>
+                    {/* QR Scanner and Manual Entry OR Wallet Payment */}
+                    {!destinationCode ? (
+                      <>
+                        {/* QR Scanner */}
+                        <div>
+                          <h4 className="font-headline font-bold text-sm text-ink uppercase tracking-tight mb-3 flex items-center gap-2">
+                            <span className="material-symbols-outlined text-[18px]">qr_code_scanner</span>
+                            Scan Shop QR Code
+                          </h4>
 
-                      {!scanningQR ? (
-                        <button
-                          onClick={handleStartScan}
-                          className="w-full py-6 border-2 border-dashed border-outline-variant rounded-sm text-center hover:border-amber snappy flex flex-col items-center gap-2"
-                        >
-                          <span className="material-symbols-outlined text-4xl text-muted">qr_code_scanner</span>
-                          <span className="font-body font-bold text-sm text-ink">Tap to Open Camera</span>
-                          <span className="font-mono text-[10px] text-muted uppercase tracking-wider">Scan the vendor&apos;s QR code</span>
-                        </button>
-                      ) : (
-                        <div className="space-y-3">
-                          <div className="relative w-full aspect-square bg-ink rounded-sm overflow-hidden">
-                            <video ref={videoRef} className="w-full h-full object-cover" playsInline muted />
-                            <canvas ref={canvasRef} className="hidden" />
-                            {/* Scanner overlay */}
-                            <div className="absolute inset-0 flex items-center justify-center">
-                              <div className="w-48 h-48 border-2 border-amber rounded-sm relative">
-                                <div className="absolute top-0 left-0 w-6 h-6 border-t-4 border-l-4 border-amber" />
-                                <div className="absolute top-0 right-0 w-6 h-6 border-t-4 border-r-4 border-amber" />
-                                <div className="absolute bottom-0 left-0 w-6 h-6 border-b-4 border-l-4 border-amber" />
-                                <div className="absolute bottom-0 right-0 w-6 h-6 border-b-4 border-r-4 border-amber" />
+                          {!scanningQR ? (
+                            <button
+                              onClick={handleStartScan}
+                              className="w-full py-6 border-2 border-dashed border-outline-variant rounded-sm text-center hover:border-amber snappy flex flex-col items-center gap-2"
+                            >
+                              <span className="material-symbols-outlined text-4xl text-muted">qr_code_scanner</span>
+                              <span className="font-body font-bold text-sm text-ink">Tap to Open Camera</span>
+                              <span className="font-mono text-[10px] text-muted uppercase tracking-wider">Scan the vendor&apos;s QR code</span>
+                            </button>
+                          ) : (
+                            <div className="space-y-3">
+                              <div className="relative w-full aspect-square bg-ink rounded-sm overflow-hidden">
+                                <video ref={videoRef} className="w-full h-full object-cover" playsInline muted />
+                                <canvas ref={canvasRef} className="hidden" />
+                                {/* Scanner overlay */}
+                                <div className="absolute inset-0 flex items-center justify-center">
+                                  <div className="w-48 h-48 border-2 border-amber rounded-sm relative">
+                                    <div className="absolute top-0 left-0 w-6 h-6 border-t-4 border-l-4 border-amber" />
+                                    <div className="absolute top-0 right-0 w-6 h-6 border-t-4 border-r-4 border-amber" />
+                                    <div className="absolute bottom-0 left-0 w-6 h-6 border-b-4 border-l-4 border-amber" />
+                                    <div className="absolute bottom-0 right-0 w-6 h-6 border-b-4 border-r-4 border-amber" />
+                                  </div>
+                                </div>
+                                <div className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-black/60 text-white px-4 py-1.5 rounded-full">
+                                  <p className="font-mono text-xs uppercase tracking-wider">Scanning…</p>
+                                </div>
                               </div>
+                              <button
+                                onClick={() => { stopCamera(); setScanningQR(false); }}
+                                className="w-full py-2 font-mono text-xs text-muted uppercase tracking-widest hover:text-ink snappy"
+                              >
+                                Close Camera
+                              </button>
                             </div>
-                            <div className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-black/60 text-white px-4 py-1.5 rounded-full">
-                              <p className="font-mono text-xs uppercase tracking-wider">Scanning…</p>
+                          )}
+                        </div>
+
+                        {/* Manual Code Entry */}
+                        <div>
+                          <h4 className="font-headline font-bold text-sm text-ink uppercase tracking-tight mb-3 flex items-center gap-2">
+                            <span className="material-symbols-outlined text-[18px]">keyboard</span>
+                            Or Enter Code Manually
+                          </h4>
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              placeholder="Enter vendor code"
+                              value={manualCode}
+                              onChange={(e) => setManualCode(e.target.value)}
+                              className="flex-1 bg-surface-container-high px-4 py-3 font-mono text-sm text-ink rounded-sm focus:outline-none focus:ring-2 focus:ring-amber snappy placeholder:text-muted"
+                            />
+                            <button
+                              onClick={handleManualCodeSubmit}
+                              disabled={!manualCode.trim()}
+                              className="px-4 py-3 bg-ink text-white font-headline font-bold text-xs uppercase tracking-wider rounded-sm snappy disabled:opacity-40"
+                            >
+                              Submit
+                            </button>
+                          </div>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="bg-surface-container-high p-4 rounded-sm flex items-center justify-between mb-2">
+                          <div>
+                            <p className="font-mono text-[10px] uppercase text-muted mb-1">Destination Code</p>
+                            <p className="font-mono text-lg font-bold text-ink">{destinationCode}</p>
+                          </div>
+                          <button onClick={() => setDestinationCode('')} className="text-terracotta text-xs font-mono uppercase tracking-widest hover:opacity-80 transition-opacity">Change</button>
+                        </div>
+
+                        {/* Wallet Pay */}
+                        <div>
+                          <h4 className="font-headline font-bold text-sm text-ink uppercase tracking-tight mb-3 flex items-center gap-2 mt-4">
+                            <span className="material-symbols-outlined text-[18px]">account_balance_wallet</span>
+                            Pay from Wallet
+                          </h4>
+                          <div className="bg-charcoal text-white p-4 rounded-sm mb-3">
+                            <div className="flex justify-between items-center">
+                              <div>
+                                <p className="font-mono text-[10px] uppercase tracking-wider text-amber">Wallet Balance</p>
+                                <p className="font-mono text-2xl font-bold">₹{walletBalance.toFixed(2)}</p>
+                              </div>
+                              {walletBalance >= discountCalc.finalAmount ? (
+                                <span className="material-symbols-outlined text-green-400 text-2xl" style={{ fontVariationSettings: "'FILL' 1" }}>check_circle</span>
+                              ) : (
+                                <span className="material-symbols-outlined text-terracotta text-2xl">warning</span>
+                              )}
                             </div>
                           </div>
                           <button
-                            onClick={() => { stopCamera(); setScanningQR(false); }}
-                            className="w-full py-2 font-mono text-xs text-muted uppercase tracking-widest hover:text-ink snappy"
+                            onClick={handleWalletPay}
+                            disabled={payingWithWallet || walletBalance < discountCalc.finalAmount}
+                            className="w-full bg-amber text-ink py-4 rounded-full font-headline font-bold text-sm tracking-[0.2em] uppercase active:scale-[0.98] snappy flex items-center justify-center gap-3 disabled:opacity-40"
                           >
-                            Close Camera
+                            <span className="material-symbols-outlined text-lg">payments</span>
+                            {payingWithWallet ? 'Processing…' : `Pay ₹${discountCalc.finalAmount.toFixed(2)} from Wallet`}
                           </button>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Manual Code Entry */}
-                    <div>
-                      <h4 className="font-headline font-bold text-sm text-ink uppercase tracking-tight mb-3 flex items-center gap-2">
-                        <span className="material-symbols-outlined text-[18px]">keyboard</span>
-                        Or Enter Code Manually
-                      </h4>
-                      <div className="flex gap-2">
-                        <input
-                          type="text"
-                          placeholder="Enter vendor code"
-                          value={manualCode}
-                          onChange={(e) => setManualCode(e.target.value)}
-                          className="flex-1 bg-surface-container-high px-4 py-3 font-mono text-sm text-ink rounded-sm focus:outline-none focus:ring-2 focus:ring-amber snappy placeholder:text-muted"
-                        />
-                        <button
-                          onClick={handleManualCodeSubmit}
-                          disabled={!manualCode.trim()}
-                          className="px-4 py-3 bg-ink text-white font-headline font-bold text-xs uppercase tracking-wider rounded-sm snappy disabled:opacity-40"
-                        >
-                          Submit
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Divider */}
-                    <div className="flex items-center gap-4">
-                      <div className="flex-1 h-px bg-outline-variant/40" />
-                      <span className="font-mono text-[10px] text-muted uppercase tracking-widest">or</span>
-                      <div className="flex-1 h-px bg-outline-variant/40" />
-                    </div>
-
-                    {/* Wallet Pay */}
-                    <div>
-                      <h4 className="font-headline font-bold text-sm text-ink uppercase tracking-tight mb-3 flex items-center gap-2">
-                        <span className="material-symbols-outlined text-[18px]">account_balance_wallet</span>
-                        Pay from Wallet
-                      </h4>
-                      <div className="bg-charcoal text-white p-4 rounded-sm mb-3">
-                        <div className="flex justify-between items-center">
-                          <div>
-                            <p className="font-mono text-[10px] uppercase tracking-wider text-amber">Wallet Balance</p>
-                            <p className="font-mono text-2xl font-bold">₹{walletBalance.toFixed(2)}</p>
-                          </div>
-                          {walletBalance >= discountCalc.finalAmount ? (
-                            <span className="material-symbols-outlined text-green-400 text-2xl" style={{ fontVariationSettings: "'FILL' 1" }}>check_circle</span>
-                          ) : (
-                            <span className="material-symbols-outlined text-terracotta text-2xl">warning</span>
+                          {walletBalance < discountCalc.finalAmount && (
+                            <button
+                              onClick={() => router.push('/wallet')}
+                              className="w-full mt-2 py-3 font-mono text-xs text-primary uppercase tracking-widest hover:text-ink snappy"
+                            >
+                              Top up wallet →
+                            </button>
                           )}
                         </div>
-                      </div>
-                      <button
-                        onClick={handleWalletPay}
-                        disabled={payingWithWallet || walletBalance < discountCalc.finalAmount}
-                        className="w-full bg-amber text-ink py-4 rounded-full font-headline font-bold text-sm tracking-[0.2em] uppercase active:scale-[0.98] snappy flex items-center justify-center gap-3 disabled:opacity-40"
-                      >
-                        <span className="material-symbols-outlined text-lg">payments</span>
-                        {payingWithWallet ? 'Processing…' : `Pay ₹${discountCalc.finalAmount.toFixed(2)} from Wallet`}
-                      </button>
-                      {walletBalance < discountCalc.finalAmount && (
+                        
+                        <div className="flex items-center gap-4 py-2 my-2">
+                           <div className="flex-1 h-px bg-outline-variant/40" />
+                           <span className="font-mono text-[10px] text-muted uppercase tracking-widest">or</span>
+                           <div className="flex-1 h-px bg-outline-variant/40" />
+                        </div>
+                        
                         <button
-                          onClick={() => router.push('/wallet')}
-                          className="w-full mt-2 py-3 font-mono text-xs text-primary uppercase tracking-widest hover:text-ink snappy"
+                          onClick={() => { setClaimStep('processing'); processRedemption(destinationCode); }}
+                          className="w-full bg-surface-container-high text-ink py-4 rounded-full font-headline font-bold text-sm tracking-[0.2em] uppercase active:scale-[0.98] snappy flex items-center justify-center gap-3 border border-outline-variant hover:border-ink"
                         >
-                          Top up wallet →
+                          <span className="material-symbols-outlined text-lg">storefront</span>
+                          Pay at Counter
                         </button>
-                      )}
-                    </div>
+                      </>
+                    )}
 
                     {claimError && (
                       <div className="p-3 bg-error-container text-on-error-container rounded-sm text-sm font-body">{claimError}</div>
                     )}
 
                     <button
-                      onClick={() => { setClaimStep('enter-amount'); setClaimError(''); stopCamera(); setScanningQR(false); }}
+                      onClick={() => { setClaimStep('enter-amount'); setClaimError(''); stopCamera(); setScanningQR(false); setDestinationCode(''); }}
                       className="w-full py-3 font-mono text-xs text-muted uppercase tracking-widest hover:text-ink snappy"
                     >
                       ← Change Amount

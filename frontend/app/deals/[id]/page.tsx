@@ -38,9 +38,19 @@ function discountLabel(deal: DealDetail) {
 function formatDate(ts: unknown) {
   if (!ts) return '—';
   try {
-    const d = (ts as { toDate?: () => Date }).toDate ? (ts as { toDate: () => Date }).toDate() : new Date(ts as string);
+    let d: Date;
+    if ((ts as any).toDate) {
+      d = (ts as any).toDate();
+    } else if (typeof ts === 'object' && ts !== null && '_seconds' in ts) {
+      d = new Date((ts as any)._seconds * 1000);
+    } else {
+      d = new Date(ts as string | number);
+    }
+    if (isNaN(d.getTime())) return '—';
     return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
-  } catch { return '—'; }
+  } catch {
+    return '—';
+  }
 }
 
 export default function DealDetailPage() {
