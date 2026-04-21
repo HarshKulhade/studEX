@@ -53,7 +53,7 @@ interface Stats { totalUsers: number; totalDeals: number; totalVendors: number; 
 
 const EMPTY_DEAL = {
   shopName: '', title: '', offer: '', rating: '4.0', category: 'food',
-  address: '', lat: '', lng: '', description: '',
+  address: '', lat: '', lng: '', googleMapsUrl: '', description: '',
   validFrom: new Date().toISOString().slice(0, 10),
   validUntil: new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10),
   isActive: true,
@@ -215,6 +215,7 @@ export default function AdminPage() {
       address: deal.address || '',
       lat: String(coords[1] || ''),
       lng: String(coords[0] || ''),
+      googleMapsUrl: deal.googleMapsUrl || '',
       description: deal.description || '',
       validFrom: new Date().toISOString().slice(0, 10),
       validUntil: new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10),
@@ -394,8 +395,11 @@ export default function AdminPage() {
                   <Field label="Latitude (for Maps)">
                     <input className={inp} value={dealForm.lat} onChange={e => setDealForm(f => ({ ...f, lat: e.target.value }))} placeholder="e.g. 22.7196" />
                   </Field>
-                  <Field label="Longitude (for Maps)">
+                  <Field label="Longitude (default/fallback)">
                     <input className={inp} value={dealForm.lng} onChange={e => setDealForm(f => ({ ...f, lng: e.target.value }))} placeholder="e.g. 75.8577" />
+                  </Field>
+                  <Field label="Google Maps URL">
+                    <input className={inp} value={dealForm.googleMapsUrl} onChange={e => setDealForm(f => ({ ...f, googleMapsUrl: e.target.value }))} placeholder="e.g. https://maps.app.goo.gl/..." />
                   </Field>
                   <Field label="Valid From">
                     <input type="date" className={inp} value={dealForm.validFrom} onChange={e => setDealForm(f => ({ ...f, validFrom: e.target.value }))} />

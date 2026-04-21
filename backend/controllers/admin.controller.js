@@ -64,9 +64,9 @@ const adminCreateDeal = async (req, res, next) => {
         type: 'Point',
         coordinates: [parseFloat(lng) || 0, parseFloat(lat) || 0],
       },
-      googleMapsUrl: (lat && lng)
+      googleMapsUrl: req.body.googleMapsUrl || ((lat && lng)
         ? `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`
-        : (address ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}` : ''),
+        : (address ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}` : '')),
       // Keep compatibility with existing deal fields
       discountType: 'percentage',
       discountValue: parseFloat(offer) || 0,
@@ -97,7 +97,7 @@ const adminUpdateDeal = async (req, res, next) => {
     const {
       shopName, title, description, offer, rating,
       category, address, lat, lng,
-      validFrom, validUntil, isActive,
+      validFrom, validUntil, isActive, googleMapsUrl
     } = req.body;
 
     const updates = {
@@ -114,6 +114,7 @@ const adminUpdateDeal = async (req, res, next) => {
     if (isActive !== undefined) updates.isActive = isActive === 'true' || isActive === true;
     if (validFrom) updates.validFrom = new Date(validFrom);
     if (validUntil) updates.validUntil = new Date(validUntil);
+    if (googleMapsUrl) updates.googleMapsUrl = googleMapsUrl;
 
     if (req.file) {
       updates.coverImageUrl = req.file.path;
@@ -126,7 +127,12 @@ const adminUpdateDeal = async (req, res, next) => {
       const newLng = lng !== undefined ? parseFloat(lng) : existingCoords[0];
       const newLat = lat !== undefined ? parseFloat(lat) : existingCoords[1];
       updates.vendorLocation = { type: 'Point', coordinates: [newLng, newLat] };
-      updates.googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${newLat},${newLng}`;
+      if (!googleMapsUrl && !existing.googleMapsUrl) {
+         updates.googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${newLat},${newLng}`;
+      } else if (!googleMapsUrl && existing.googleMapsUrl && existing.googleMapsUrl.includes('/maps/search/?api=1&query=')) {
+         // Auto-update if it was an auto-generated one
+         updates.googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${newLat},${newLng}`;
+      }
     }
 
     await db.collection('deals').doc(id).update(updates);
