@@ -38,7 +38,13 @@ const getNearbyDeals = async (req, res, next) => {
       // d is already a plain object from Deal.find() (Firestore-backed)
       const plain = d._doc ? { _id: d._id, ...d._doc } : { ...d };
       const coords = plain.vendorLocation?.coordinates;
-      const hasLocation = coords && coords.length === 2 && !(coords[0] === 0 && coords[1] === 0);
+      const hasLocation = Array.isArray(coords) && 
+                          coords.length === 2 && 
+                          typeof coords[0] === 'number' && 
+                          typeof coords[1] === 'number' &&
+                          !isNaN(coords[0]) && 
+                          !isNaN(coords[1]) &&
+                          !(coords[0] === 0 && coords[1] === 0);
       let distanceMetres = null;
       if (hasLocation) {
         const [dLng, dLat] = coords;

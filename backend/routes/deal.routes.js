@@ -24,7 +24,7 @@ router.get(
   [
     query('lat').notEmpty().withMessage('lat is required').isFloat().withMessage('lat must be a number'),
     query('lng').notEmpty().withMessage('lng is required').isFloat().withMessage('lng must be a number'),
-    query('radius').optional().isInt({ min: 100, max: 50000 }).withMessage('radius must be between 100 and 50000 metres'),
+    query('radius').optional().isInt({ min: 100, max: 1000000 }).withMessage('radius must be between 100 and 1000000 metres'),
     query('page').optional().isInt({ min: 1 }).withMessage('page must be a positive integer'),
     query('limit').optional().isInt({ min: 1, max: 50 }).withMessage('limit must be between 1 and 50'),
   ],
