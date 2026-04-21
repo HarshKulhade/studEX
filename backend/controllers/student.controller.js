@@ -126,7 +126,7 @@ const getDashboard = async (req, res, next) => {
     ]);
 
     // Count active deals, falling back to all active deals if location is not set
-    const activeDeals = await Deal.find({ isActive: true, validUntil: { $gt: new Date() } });
+    const activeDeals = await Deal.find({ isActive: true, validUntil: { $gt: new Date() } }).lean();
     let nearbyDealsCount = activeDeals.length; // Default to all if no location
 
     if (
@@ -145,7 +145,11 @@ const getDashboard = async (req, res, next) => {
         userLng,
         2000 // 2km radius
       );
-      nearbyDealsCount = nearby.length;
+      // Fallback: If strict 2km filter yields 0 but we have active deals, show all active deals count 
+      // so the dashboard doesn't confusingly say '0' while the Deals page shows active deals.
+      if (nearby.length > 0) {
+        nearbyDealsCount = nearby.length;
+      }
     }
 
     return ApiResponse.success(res, 200, 'Dashboard data fetched', {
