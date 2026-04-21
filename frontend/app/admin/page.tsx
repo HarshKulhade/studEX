@@ -109,6 +109,8 @@ export default function AdminPage() {
   const [msg, setMsg] = useState('');
   const [previewImg, setPreviewImg] = useState<string | null>(null);
   const [verifyingUser, setVerifyingUser] = useState<string | null>(null);
+  const [showVendorForm, setShowVendorForm] = useState(false);
+  const [vendorForm, setVendorForm] = useState({ businessName: '', email: '', phone: '', category: 'food', address: '' });
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (user) => {
@@ -954,6 +956,7 @@ export default function AdminPage() {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }

@@ -13,13 +13,13 @@ const col = () => db.collection(COLLECTION);
 const create = async (data) => {
   const now = new Date();
   const doc = {
-    ownerName: data.ownerName,
-    businessName: data.businessName,
-    email: data.email.toLowerCase().trim(),
-    phone: data.phone,
-    passwordHash: data.passwordHash,
+    ownerName: data.ownerName || '',
+    businessName: data.businessName || '',
+    email: (data.email || '').toLowerCase().trim(),
+    phone: data.phone || '',
+    passwordHash: data.passwordHash || '',
     category: data.category || 'other',
-    address: data.address,
+    address: data.address || '',
     location: data.location || { type: 'Point', coordinates: [0, 0] },
     logoUrl: data.logoUrl || null,
     isApproved: data.isApproved || false,
