@@ -48,7 +48,7 @@ const adminCreateDeal = async (req, res, next) => {
     const {
       shopName, title, description, offer, rating,
       category, address, lat, lng,
-      validFrom, validUntil, isActive,
+      validFrom, validUntil, isActive, minOrderValue
     } = req.body;
 
     const now = new Date();
@@ -67,9 +67,9 @@ const adminCreateDeal = async (req, res, next) => {
       googleMapsUrl: req.body.googleMapsUrl || ((lat && lng)
         ? `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`
         : (address ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}` : '')),
-      // Keep compatibility with existing deal fields
       discountType: 'percentage',
       discountValue: parseFloat(offer) || 0,
+      minOrderValue: minOrderValue !== undefined ? parseFloat(minOrderValue) : 99,
       cashbackAmount: 0,
       validFrom: validFrom ? new Date(validFrom) : now,
       validUntil: validUntil ? new Date(validUntil) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
@@ -97,7 +97,7 @@ const adminUpdateDeal = async (req, res, next) => {
     const {
       shopName, title, description, offer, rating,
       category, address, lat, lng,
-      validFrom, validUntil, isActive, googleMapsUrl
+      validFrom, validUntil, isActive, googleMapsUrl, minOrderValue
     } = req.body;
 
     const updates = {
@@ -111,6 +111,7 @@ const adminUpdateDeal = async (req, res, next) => {
     if (rating !== undefined) updates.rating = parseFloat(rating);
     if (category !== undefined) updates.category = category;
     if (address !== undefined) updates.address = address;
+    if (minOrderValue !== undefined) updates.minOrderValue = parseFloat(minOrderValue);
     if (isActive !== undefined) updates.isActive = isActive === 'true' || isActive === true;
     if (validFrom) updates.validFrom = new Date(validFrom);
     if (validUntil) updates.validUntil = new Date(validUntil);

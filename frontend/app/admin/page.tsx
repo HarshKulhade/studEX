@@ -52,7 +52,7 @@ interface User {
 interface Stats { totalUsers: number; totalDeals: number; totalVendors: number; }
 
 const EMPTY_DEAL = {
-  shopName: '', title: '', offer: '', rating: '4.0', category: 'food',
+  shopName: '', title: '', offer: '', minOrderValue: '99', rating: '4.0', category: 'food',
   address: '', lat: '', lng: '', googleMapsUrl: '', description: '', coverImageUrl: '',
   validFrom: new Date().toISOString().slice(0, 10),
   validUntil: new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10),
@@ -229,6 +229,7 @@ export default function AdminPage() {
       shopName: deal.shopName || '',
       title: deal.title || '',
       offer: deal.offer || '',
+      minOrderValue: deal.minOrderValue !== undefined ? String(deal.minOrderValue) : '99',
       rating: String(deal.rating || '4.0'),
       category: deal.category || 'food',
       address: deal.address || '',
@@ -240,6 +241,7 @@ export default function AdminPage() {
       validUntil: new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10),
       isActive: deal.isActive,
       coverImage: null,
+      coverImageUrl: deal.coverImageUrl || '',
     });
     setEditingDeal(deal._id);
     setShowDealForm(true);
@@ -399,6 +401,9 @@ export default function AdminPage() {
                   </Field>
                   <Field label="Offer (e.g. 15% off on all items) *">
                     <input className={inp} value={dealForm.offer} onChange={e => setDealForm(f => ({ ...f, offer: e.target.value }))} required placeholder="15% off on all items" />
+                  </Field>
+                  <Field label="Min Order Value (₹)">
+                    <input type="number" min="0" className={inp} value={dealForm.minOrderValue} onChange={e => setDealForm(f => ({ ...f, minOrderValue: e.target.value }))} placeholder="e.g. 99" />
                   </Field>
                   <Field label="Rating (out of 5)">
                     <input type="number" step="0.1" min="0" max="5" className={inp} value={dealForm.rating} onChange={e => setDealForm(f => ({ ...f, rating: e.target.value }))} />

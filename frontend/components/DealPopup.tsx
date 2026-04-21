@@ -22,6 +22,7 @@ interface DealDetail {
   termsAndConditions?: string;
   shopName?: string;
   offer?: string;
+  minOrderValue?: number;
   rating?: number;
   address?: string;
   googleMapsUrl?: string;
@@ -98,8 +99,8 @@ function calculateDiscount(deal: DealDetail, amount: number): { discount: number
   if (amount <= 0) return { discount: 0, finalAmount: 0, eligible: false, reason: 'Enter a valid amount' };
 
   if (deal.discountType === 'percentage') {
-    // E.g. "10% off above ₹99"
-    const minAmount = deal.discountValue > 0 ? 99 : 0; // common minimum
+    // E.g. "10% off above ₹99" or custom minOrderValue
+    const minAmount = typeof deal.minOrderValue === 'number' ? deal.minOrderValue : (deal.discountValue > 0 ? 99 : 0);
     if (amount < minAmount) {
       return {
         discount: 0,
