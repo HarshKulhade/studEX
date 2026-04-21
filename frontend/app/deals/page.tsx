@@ -21,6 +21,7 @@ interface Deal {
   googleMapsUrl?: string;
   validUntil?: unknown;
   distanceMetres?: number;
+  coverImageUrl?: string;
   vendor?: {
     _id: string;
     businessName: string;
@@ -308,21 +309,27 @@ export default function DealsPage() {
                 >
                   {/* Banner */}
                   <div className={`relative h-28 flex items-center justify-center ${badgeColor.split(' ')[0]} bg-opacity-15`}
-                    style={{ background: `linear-gradient(135deg, var(--color-surface-container-high) 0%, var(--color-surface-container-highest, #E8E4DD) 100%)` }}
+                    style={{ background: deal.coverImageUrl ? 'none' : `linear-gradient(135deg, var(--color-surface-container-high) 0%, var(--color-surface-container-highest, #E8E4DD) 100%)` }}
                   >
-                    {/* Shop initial */}
-                    <span className="font-headline font-black text-5xl text-ink/10 select-none uppercase">
-                      {name.charAt(0)}
-                    </span>
+                    {deal.coverImageUrl ? (
+                      <>
+                        <img src={deal.coverImageUrl} alt={name} className="absolute inset-0 w-full h-full object-cover" />
+                        <div className="absolute inset-0 bg-black/20" />
+                      </>
+                    ) : (
+                      <span className="font-headline font-black text-5xl text-ink/10 select-none uppercase z-10">
+                        {name.charAt(0)}
+                      </span>
+                    )}
                     {/* Offer badge */}
                     {offer && (
-                      <div className={`absolute top-2 left-2 px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wide ${badgeColor}`}>
+                      <div className={`absolute top-2 left-2 px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wide z-10 ${badgeColor}`}>
                         {offer}
                       </div>
                     )}
                     {/* Distance */}
                     {deal.distanceMetres != null && (
-                      <div className="absolute bottom-2 right-2 bg-black/30 text-white px-2 py-0.5 rounded-full text-[10px] font-mono">
+                      <div className="absolute bottom-2 right-2 bg-black/60 backdrop-blur-sm text-white px-2 py-0.5 rounded-full text-[10px] font-mono z-10">
                         {distanceLabel(deal.distanceMetres)}
                       </div>
                     )}

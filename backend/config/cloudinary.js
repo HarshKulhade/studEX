@@ -62,6 +62,9 @@ const documentUploader = createUploader(
   20
 );
 
+/** For deal covers */
+const dealCoverUploader = createUploader('student-super-app/deal-covers', ['jpg', 'jpeg', 'png', 'webp'], 5);
+
 module.exports = {
   cloudinary,
   createUploader,
@@ -69,4 +72,5 @@ module.exports = {
   logoUploader,
   avatarUploader,
   documentUploader,
+  dealCoverUploader,
 };

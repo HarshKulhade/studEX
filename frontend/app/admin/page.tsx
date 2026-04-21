@@ -23,6 +23,7 @@ interface Deal {
   isActive: boolean;
   validUntil?: any;
   description?: string;
+  coverImageUrl?: string;
 }
 
 interface Opportunity {
@@ -56,6 +57,7 @@ const EMPTY_DEAL = {
   validFrom: new Date().toISOString().slice(0, 10),
   validUntil: new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10),
   isActive: true,
+  coverImage: null as File | null,
 };
 const EMPTY_OPP = {
   title: '', company: '', type: 'internship', location: '', stipend: '', applyUrl: '',
@@ -105,9 +107,19 @@ export default function AdminPage() {
 
   const apiFetch = useCallback(async (path: string, options?: RequestInit) => {
     const token = await getToken();
+    const isFormData = options?.body instanceof FormData;
+    
+    const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
+    if (!isFormData) {
+      headers['Content-Type'] = 'application/json';
+    }
+    if (options?.headers) {
+      Object.assign(headers, options.headers);
+    }
+
     const res = await fetch(`${API}${path}`, {
       ...options,
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, ...options?.headers },
+      headers,
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.message || 'API error');
@@ -156,11 +168,20 @@ export default function AdminPage() {
     setSaving(true);
     setMsg('');
     try {
+      const fd = new FormData();
+      Object.entries(dealForm).forEach(([k, v]) => {
+        if (k === 'coverImage') {
+          if (v) fd.append('coverImage', v as File);
+        } else {
+          fd.append(k, String(v));
+        }
+      });
+
       if (editingDeal) {
-        await apiFetch(`/deals/${editingDeal}`, { method: 'PUT', body: JSON.stringify(dealForm) });
+        await apiFetch(`/deals/${editingDeal}`, { method: 'PUT', body: fd });
         setMsg('✅ Deal updated!');
       } else {
-        await apiFetch('/deals', { method: 'POST', body: JSON.stringify(dealForm) });
+        await apiFetch('/deals', { method: 'POST', body: fd });
         setMsg('✅ Deal created!');
       }
       setDealForm({ ...EMPTY_DEAL });
@@ -198,6 +219,7 @@ export default function AdminPage() {
       validFrom: new Date().toISOString().slice(0, 10),
       validUntil: new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10),
       isActive: deal.isActive,
+      coverImage: null,
     });
     setEditingDeal(deal._id);
     setShowDealForm(true);
@@ -385,6 +407,9 @@ export default function AdminPage() {
                 <Field label="Description">
                   <textarea className={`${inp} h-20 resize-none`} value={dealForm.description} onChange={e => setDealForm(f => ({ ...f, description: e.target.value }))} />
                 </Field>
+                <Field label="Cover Image">
+                  <input type="file" accept="image/*" onChange={e => setDealForm(f => ({ ...f, coverImage: e.target.files?.[0] || null }))} className="text-sm text-white/70" />
+                </Field>
                 <label className="flex items-center gap-3 cursor-pointer">
                   <input type="checkbox" checked={dealForm.isActive} onChange={e => setDealForm(f => ({ ...f, isActive: e.target.checked }))} className="accent-amber w-4 h-4" />
                   <span className="text-sm text-white/70">Active (visible to students)</span>
@@ -407,6 +432,11 @@ export default function AdminPage() {
                 {deals.map(deal => (
                   <div key={deal._id} className="bg-[#1a1a1a] border border-white/10 rounded-2xl p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                     <div className="flex-1 min-w-0">
+                      {deal.coverImageUrl && (
+                        <div className="mb-3 w-16 h-16 rounded overflow-hidden">
+                          <img src={deal.coverImageUrl} alt="Deal cover" className="w-full h-full object-cover" />
+                        </div>
+                      )}
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className={`w-2 h-2 rounded-full flex-shrink-0 ${deal.isActive ? 'bg-green-400' : 'bg-white/20'}`} />
                         <h3 className="font-bold text-base truncate">{deal.shopName || deal.title}</h3>

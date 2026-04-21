@@ -126,7 +126,7 @@ const getDashboard = async (req, res, next) => {
     ]);
 
     // Count active deals, falling back to all active deals if location is not set
-    const activeDeals = await Deal.find({ isActive: true, validUntil: { $gt: new Date() } }).lean();
+    const activeDeals = await Deal.find({ isActive: true, validUntil: { $gt: new Date() } });
     let nearbyDealsCount = activeDeals.length; // Default to all if no location
 
     if (

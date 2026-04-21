@@ -73,9 +73,10 @@ const adminCreateDeal = async (req, res, next) => {
       cashbackAmount: 0,
       validFrom: validFrom ? new Date(validFrom) : now,
       validUntil: validUntil ? new Date(validUntil) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-      isActive: isActive !== false,
+      isActive: isActive !== false && isActive !== 'false',
       redeemedCount: 0,
       vendor: 'admin',
+      coverImageUrl: req.file ? req.file.path : null,
       createdAt: now,
       updatedAt: now,
     };
@@ -110,9 +111,13 @@ const adminUpdateDeal = async (req, res, next) => {
     if (rating !== undefined) updates.rating = parseFloat(rating);
     if (category !== undefined) updates.category = category;
     if (address !== undefined) updates.address = address;
-    if (isActive !== undefined) updates.isActive = isActive;
+    if (isActive !== undefined) updates.isActive = isActive === 'true' || isActive === true;
     if (validFrom) updates.validFrom = new Date(validFrom);
     if (validUntil) updates.validUntil = new Date(validUntil);
+
+    if (req.file) {
+      updates.coverImageUrl = req.file.path;
+    }
 
     if (lat !== undefined || lng !== undefined) {
       const existingSnap = await db.collection('deals').doc(id).get();

@@ -25,6 +25,7 @@ interface DealDetail {
   rating?: number;
   address?: string;
   googleMapsUrl?: string;
+  coverImageUrl?: string;
   vendor?: {
     _id: string;
     businessName: string;
@@ -498,7 +499,9 @@ export default function DealPopup({ dealId, onClose }: DealPopupProps) {
               {/* ── Merchant Header ── */}
               <section className="px-0">
                 <div className="w-full aspect-[4/3] overflow-hidden relative">
-                  {deal.vendor?.logoUrl ? (
+                  {deal.coverImageUrl ? (
+                    <img alt={name} className="w-full h-full object-cover" src={deal.coverImageUrl} />
+                  ) : deal.vendor?.logoUrl ? (
                     <img alt={name} className="w-full h-full object-cover" src={deal.vendor.logoUrl} />
                   ) : (
                     <div className="w-full h-full pattern-amber flex items-center justify-center relative">

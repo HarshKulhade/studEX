@@ -21,10 +21,12 @@ router.use(protectAdmin);
 
 router.get('/stats', getStats);
 
+const { dealCoverUploader } = require('../config/cloudinary');
+
 // Deals
 router.get('/deals', getAllDeals);
-router.post('/deals', adminCreateDeal);
-router.put('/deals/:id', adminUpdateDeal);
+router.post('/deals', dealCoverUploader.single('coverImage'), adminCreateDeal);
+router.put('/deals/:id', dealCoverUploader.single('coverImage'), adminUpdateDeal);
 router.delete('/deals/:id', adminDeleteDeal);
 
 // Users
