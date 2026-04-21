@@ -870,7 +870,7 @@ export default function DealPopup({ dealId, onClose }: DealPopupProps) {
                         </div>
                         
                         <button
-                          onClick={() => { setClaimStep('processing'); processRedemption(destinationCode); }}
+                          onClick={() => { setClaimStep('processing'); processRedemption(); }}
                           className="w-full bg-surface-container-high text-ink py-4 rounded-full font-headline font-bold text-sm tracking-[0.2em] uppercase active:scale-[0.98] snappy flex items-center justify-center gap-3 border border-outline-variant hover:border-ink"
                         >
                           <span className="material-symbols-outlined text-lg">storefront</span>
