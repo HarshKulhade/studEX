@@ -14,10 +14,13 @@ const {
   getAllOpportunities,
   adminCreateOpportunity,
   adminDeleteOpportunity,
+  scrapeUrl,
 } = require('../controllers/admin.controller');
 
 // All admin routes require admin auth
 router.use(protectAdmin);
+
+router.post('/scrape-url', scrapeUrl);
 
 router.get('/stats', getStats);
 

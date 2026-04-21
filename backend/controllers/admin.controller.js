@@ -76,7 +76,7 @@ const adminCreateDeal = async (req, res, next) => {
       isActive: isActive !== false && isActive !== 'false',
       redeemedCount: 0,
       vendor: 'admin',
-      coverImageUrl: req.file ? req.file.path : null,
+      coverImageUrl: req.file ? req.file.path : (req.body.coverImageUrl || null),
       createdAt: now,
       updatedAt: now,
     };
@@ -114,7 +114,8 @@ const adminUpdateDeal = async (req, res, next) => {
     if (isActive !== undefined) updates.isActive = isActive === 'true' || isActive === true;
     if (validFrom) updates.validFrom = new Date(validFrom);
     if (validUntil) updates.validUntil = new Date(validUntil);
-    if (googleMapsUrl) updates.googleMapsUrl = googleMapsUrl;
+    if (googleMapsUrl !== undefined) updates.googleMapsUrl = googleMapsUrl;
+    if (req.body.coverImageUrl !== undefined) updates.coverImageUrl = req.body.coverImageUrl || null;
 
     if (req.file) {
       updates.coverImageUrl = req.file.path;
@@ -274,6 +275,66 @@ const adminVerifyUser = async (req, res, next) => {
   }
 };
 
+// ─────────────────────────────────────────────────
+//  POST /api/admin/scrape-url
+// ─────────────────────────────────────────────────
+const scrapeUrl = async (req, res, next) => {
+  try {
+    const { url } = req.body;
+    if (!url) return ApiResponse.error(res, 400, 'URL is required');
+
+    // Basic regex to find og:image
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+      }
+    });
+    
+    if (!response.ok) {
+      return ApiResponse.error(res, 400, 'Failed to fetch the URL');
+    }
+
+    const html = await response.text();
+    
+    let ogImage = null;
+    const ogMatch = html.match(/<meta\s+(?:property|name)="og:image"\s+content="([^"]+)"/i);
+    if (ogMatch && ogMatch[1]) {
+      ogImage = ogMatch[1];
+    } else {
+      // Fallback to Twitter image
+      const twMatch = html.match(/<meta\s+(?:property|name)="twitter:image"\s+content="([^"]+)"/i);
+      if (twMatch && twMatch[1]) {
+        ogImage = twMatch[1];
+      }
+    }
+
+    // Google Maps specific fallback if no generic og:image
+    if (!ogImage && html.includes('maps.google.com/maps/api/staticmap')) {
+       // Maybe try to extract the static map or thumbnail directly
+       const thumbMatch = html.match(/"([^"]+ggpht\.com[^"]+)"/i);
+       if (thumbMatch && thumbMatch[1]) ogImage = thumbMatch[1];
+    }
+
+    // A lot of google maps images are locked up in JS state arrays, we can try matching unescaped URLs finding images
+    if (!ogImage) {
+      // Find the first googleusercontent.com or ggpht.com URL
+      const fallbackMatch = html.match(/(https:\/\/[a-zA-Z0-9-]+\.(?:googleusercontent|ggpht)\.com\/p\/[a-zA-Z0-9_-]+)/i);
+      if (fallbackMatch && fallbackMatch[1]) {
+        ogImage = fallbackMatch[1];
+      }
+    }
+
+    // If it starts with //, prepend https:
+    if (ogImage && ogImage.startsWith('//')) {
+      ogImage = 'https:' + ogImage;
+    }
+
+    return ApiResponse.success(res, 200, 'Scraped details', { ogImage });
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = {
   getStats,
   getAllDeals,
@@ -285,4 +346,5 @@ module.exports = {
   getAllOpportunities,
   adminCreateOpportunity,
   adminDeleteOpportunity,
+  scrapeUrl,
 };

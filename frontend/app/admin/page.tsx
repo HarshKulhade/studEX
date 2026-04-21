@@ -53,7 +53,7 @@ interface Stats { totalUsers: number; totalDeals: number; totalVendors: number; 
 
 const EMPTY_DEAL = {
   shopName: '', title: '', offer: '', rating: '4.0', category: 'food',
-  address: '', lat: '', lng: '', googleMapsUrl: '', description: '',
+  address: '', lat: '', lng: '', googleMapsUrl: '', description: '', coverImageUrl: '',
   validFrom: new Date().toISOString().slice(0, 10),
   validUntil: new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10),
   isActive: true,
@@ -87,6 +87,7 @@ export default function AdminPage() {
   const [showDealForm, setShowDealForm] = useState(false);
   const [showOppForm, setShowOppForm] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [fetchingPhoto, setFetchingPhoto] = useState(false);
   const [msg, setMsg] = useState('');
   const [previewImg, setPreviewImg] = useState<string | null>(null);
   const [verifyingUser, setVerifyingUser] = useState<string | null>(null);
@@ -202,6 +203,24 @@ export default function AdminPage() {
       setMsg('🗑️ Deal deleted');
       await load();
     } catch (err: any) { setMsg(`❌ ${err.message}`); }
+  };
+
+  const handleFetchPhoto = async () => {
+    if (!dealForm.googleMapsUrl) return;
+    setFetchingPhoto(true);
+    try {
+      const res = await apiFetch('/scrape-url', { method: 'POST', body: JSON.stringify({ url: dealForm.googleMapsUrl }) });
+      if (res.data?.ogImage) {
+        setDealForm(f => ({ ...f, coverImageUrl: res.data.ogImage, coverImage: null }));
+        setMsg('Photo fetched successfully!');
+      } else {
+        setMsg('No suitable photo found at this URL.');
+      }
+    } catch (err: any) {
+      setMsg(`Fetch error: ${err.message}`);
+    } finally {
+      setFetchingPhoto(false);
+    }
   };
 
   const handleEditDeal = (deal: Deal) => {
@@ -399,7 +418,12 @@ export default function AdminPage() {
                     <input className={inp} value={dealForm.lng} onChange={e => setDealForm(f => ({ ...f, lng: e.target.value }))} placeholder="e.g. 75.8577" />
                   </Field>
                   <Field label="Google Maps URL">
-                    <input className={inp} value={dealForm.googleMapsUrl} onChange={e => setDealForm(f => ({ ...f, googleMapsUrl: e.target.value }))} placeholder="e.g. https://maps.app.goo.gl/..." />
+                    <div className="flex gap-2">
+                       <input className={inp} value={dealForm.googleMapsUrl} onChange={e => setDealForm(f => ({ ...f, googleMapsUrl: e.target.value }))} placeholder="e.g. https://maps.app.goo.gl/..." />
+                       <button type="button" onClick={handleFetchPhoto} disabled={!dealForm.googleMapsUrl || fetchingPhoto} className="whitespace-nowrap bg-indigo-900/40 hover:bg-indigo-900/60 text-indigo-300 px-3 rounded-lg text-xs font-bold disabled:opacity-50">
+                         {fetchingPhoto ? 'Fetching...' : 'Fetch Photo'}
+                       </button>
+                    </div>
                   </Field>
                   <Field label="Valid From">
                     <input type="date" className={inp} value={dealForm.validFrom} onChange={e => setDealForm(f => ({ ...f, validFrom: e.target.value }))} />
@@ -412,6 +436,12 @@ export default function AdminPage() {
                   <textarea className={`${inp} h-20 resize-none`} value={dealForm.description} onChange={e => setDealForm(f => ({ ...f, description: e.target.value }))} />
                 </Field>
                 <Field label="Cover Image">
+                  {dealForm.coverImageUrl && !dealForm.coverImage && (
+                    <div className="mb-3 w-32 h-20 rounded overflow-hidden relative">
+                       <img src={dealForm.coverImageUrl} className="w-full h-full object-cover" />
+                       <button type="button" onClick={() => setDealForm(f => ({ ...f, coverImageUrl: '' }))} className="absolute top-1 right-1 bg-black/60 text-white rounded-full w-5 h-5 flex items-center justify-center text-[10px]">✕</button>
+                    </div>
+                  )}
                   <input type="file" accept="image/*" onChange={e => setDealForm(f => ({ ...f, coverImage: e.target.files?.[0] || null }))} className="text-sm text-white/70" />
                 </Field>
                 <label className="flex items-center gap-3 cursor-pointer">
