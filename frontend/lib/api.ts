@@ -120,7 +120,7 @@ export const dealApi = {
 
 export const redemptionApi = {
   redeemDeal: (token: string, dealId: string) =>
-    apiFetch('/api/redemptions', { method: 'POST', body: JSON.stringify({ dealId }) }, token),
+    apiFetch('/api/redemptions/generate', { method: 'POST', body: JSON.stringify({ dealId }) }, token),
 
   payVendor: (token: string, payload: { dealId: string; vendorCode: string; amount: number }) =>
     apiFetch('/api/redemptions/pay', { method: 'POST', body: JSON.stringify(payload) }, token),

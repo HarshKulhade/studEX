@@ -229,11 +229,16 @@ const payVendor = async (req, res, next) => {
       cashbackCredited: false, // Could process later
     });
 
-    // Increment deal count
+    // Increment deal redeemed count
     deal.redeemedCount = (deal.redeemedCount || 0) + 1;
-    await Deal.save?.(deal); // Fire and forget map, abstract update
+    await Deal.save(deal);
 
-    res.json({ success: true, message: 'Payment successfully sent to vendor!', data: { redemptionId: redemption._id, cashbackAmount: redemption.cashbackAmount } });
+    return ApiResponse.success(res, 200, `Payment of ₹${payAmount.toFixed(2)} to ${vendor.businessName} was successful!`, {
+      redemptionId: redemption._id,
+      cashbackAmount: redemption.cashbackAmount,
+      vendorName: vendor.businessName,
+      amountPaid: payAmount,
+    });
   } catch (err) {
     next(err);
   }
