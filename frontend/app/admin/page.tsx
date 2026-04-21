@@ -16,6 +16,9 @@ interface Deal {
   shopName?: string;
   title: string;
   offer?: string;
+  discountType?: string;
+  discountValue?: number;
+  minOrderValue?: number;
   rating?: number;
   category?: string;
   address?: string;
