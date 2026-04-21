@@ -344,6 +344,76 @@ const scrapeUrl = async (req, res, next) => {
   }
 };
 
+// ─────────────────────────────────────────────────
+//  GET /api/admin/vendors
+// ─────────────────────────────────────────────────
+const getAllVendors = async (req, res, next) => {
+  try {
+    const snap = await db.collection('vendors').orderBy('createdAt', 'desc').get();
+    const vendors = snap.docs.map(d => ({ _id: d.id, ...d.data() }));
+    return ApiResponse.success(res, 200, 'Vendors fetched', vendors);
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ─────────────────────────────────────────────────
+//  POST /api/admin/vendors
+// ─────────────────────────────────────────────────
+const adminCreateVendor = async (req, res, next) => {
+  try {
+    const { businessName, email, phone, category, address } = req.body;
+    
+    // Generate a 6 character uppercase vendor code
+    const vendorCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+    
+    // Generate simple QR Code encoding the vendor code
+    // A production scenario could use a Cloudinary upload, but a public QR chart is very solid
+    const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${vendorCode}`;
+    
+    const doc = await Vendor.create({
+      businessName: businessName || '',
+      email: email || `${vendorCode.toLowerCase()}@studex.com`,
+      phone: phone || '',
+      category: category || 'other',
+      address: address || '',
+      vendorCode,
+      qrCodeUrl,
+      isApproved: true,
+      passwordHash: 'admin-created', // default unloginable
+    });
+    
+    return ApiResponse.success(res, 201, 'Vendor created', doc);
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ─────────────────────────────────────────────────
+//  POST /api/admin/vendors/:id/pay
+// ─────────────────────────────────────────────────
+const adminPayVendor = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const vendor = await Vendor.findById(id);
+    if (!vendor) return ApiResponse.error(res, 404, 'Vendor not found.');
+    
+    if (!vendor.pendingPayable || vendor.pendingPayable <= 0) {
+      return ApiResponse.error(res, 400, 'Vendor has no pending payable balance.');
+    }
+    
+    const amountPaid = vendor.pendingPayable;
+    vendor.pendingPayable = 0;
+    // Potentially record this settlement inside a generic transactions model mapped to `adminPayout` etc.
+    
+    await Vendor.save(vendor);
+    
+    return ApiResponse.success(res, 200, `Successfully settled ₹${amountPaid.toFixed(2)} with vendor.`, vendor);
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = {
   getStats,
   getAllDeals,
@@ -356,4 +426,7 @@ module.exports = {
   adminCreateOpportunity,
   adminDeleteOpportunity,
   scrapeUrl,
+  getAllVendors,
+  adminCreateVendor,
+  adminPayVendor,
 };

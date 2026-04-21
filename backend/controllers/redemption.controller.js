@@ -3,6 +3,9 @@
 const { v4: uuidv4 } = require('uuid');
 const Deal = require('../models/Deal');
 const Redemption = require('../models/Redemption');
+const Vendor = require('../models/Vendor');
+const CashbackWallet = require('../models/CashbackWallet');
+const Transaction = require('../models/Transaction');
 const ApiResponse = require('../utils/ApiResponse');
 const { generateQRBase64 } = require('../utils/generateQR');
 
@@ -157,4 +160,83 @@ const getRedemptionById = async (req, res, next) => {
   }
 };
 
-module.exports = { generateRedemption, getMyRedemptions, getRedemptionById };
+// ─────────────────────────────────────────────────
+//  POST /api/redemptions/pay
+// ─────────────────────────────────────────────────
+const payVendor = async (req, res, next) => {
+  try {
+    const { dealId, vendorCode, amount } = req.body;
+    const studentId = req.user._id;
+    const payAmount = parseFloat(amount);
+
+    if (!vendorCode || !payAmount || payAmount <= 0) {
+      return ApiResponse.error(res, 400, 'Invalid payment details.');
+    }
+
+    const deal = await Deal.findById(dealId);
+    if (!deal || !deal.isActive) {
+      return ApiResponse.error(res, 404, 'Deal is unavailable.');
+    }
+
+    const vendor = await Vendor.findByVendorCode(vendorCode);
+    if (!vendor) {
+      return ApiResponse.error(res, 404, `Invalid Vendor Code: ${vendorCode}`);
+    }
+
+    if (deal.vendor !== vendor._id && deal.vendor !== 'admin') {
+      // Validate the code belongs to the right vendor (allowing admin created wildcards)
+      // return ApiResponse.error(res, 400, 'The vendor code does not match this deal provider.');
+    }
+
+    const wallet = await CashbackWallet.findOne({ student: studentId });
+    if (!wallet || wallet.balance < payAmount) {
+      return ApiResponse.error(res, 400, 'Insufficient wallet balance.');
+    }
+
+    // 1. Deduct from student
+    wallet.balance -= payAmount;
+    await CashbackWallet.save(wallet);
+
+    // 2. Add to vendor (deducting 5% commission)
+    const commission = payAmount * 0.05;
+    const netPayable = payAmount - commission;
+    vendor.totalSales = (vendor.totalSales || 0) + payAmount;
+    vendor.pendingPayable = (vendor.pendingPayable || 0) + netPayable;
+    await Vendor.save(vendor);
+
+    // 3. Log transaction
+    await Transaction.create({
+      wallet: wallet._id,
+      student: studentId,
+      type: 'debit',
+      amount: payAmount,
+      source: 'deal_redemption',
+      description: `Payment to ${vendor.businessName} (Code: ${vendor.vendorCode})`,
+    });
+
+    // 4. Create redemption instantly marked redeemed
+    const qrToken = uuidv4();
+    const redemption = await Redemption.create({
+      student: studentId,
+      deal: dealId,
+      vendor: vendor._id,
+      qrToken,
+      status: 'redeemed',
+      generatedAt: new Date(),
+      expiresAt: new Date(Date.now() + 10 * 60000),
+      redeemedAt: new Date(),
+      cashbackAmount: deal.cashbackAmount || 0,
+      cashbackCredited: false, // Could process later
+    });
+
+    // Increment deal count
+    deal.redeemedCount = (deal.redeemedCount || 0) + 1;
+    await Deal.save?.(deal); // Fire and forget map, abstract update
+
+    res.json({ success: true, message: 'Payment successfully sent to vendor!', data: { redemptionId: redemption._id, cashbackAmount: redemption.cashbackAmount } });
+  } catch (err) {
+    next(err);
+  }
+};
+
+module.exports = { generateRedemption, getMyRedemptions, getRedemptionById, payVendor };

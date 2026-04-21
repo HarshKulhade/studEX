@@ -343,8 +343,8 @@ export default function DealPopup({ dealId, onClose }: DealPopupProps) {
     if (token) refreshWallet();
   };
 
-  /** Step 3: Process redemption (after QR scan or wallet pay) */
-  const processRedemption = async (qrData?: string) => {
+  /** Step 3: Process generic redemption if no payment needed (e.g. BOGO) */
+  const processRedemption = async () => {
     if (!token || !deal) return;
     setClaimError('');
     try {
@@ -359,7 +359,6 @@ export default function DealPopup({ dealId, onClose }: DealPopupProps) {
         cashbackAmount: res.data?.cashbackAmount,
       });
       setClaimStep('success');
-      // Refresh wallet to show updated balance
       await refreshWallet();
     } catch (err: unknown) {
       setClaimError(err instanceof Error ? err.message : 'Failed to redeem deal.');
@@ -382,16 +381,21 @@ export default function DealPopup({ dealId, onClose }: DealPopupProps) {
     setClaimStep('processing');
 
     try {
-      // Deduct from wallet
-      await walletApi.withdraw(token, {
+      const res = await redemptionApi.payVendor(token, {
+        dealId,
+        vendorCode: destinationCode,
         amount: finalAmount,
-        upiId: 'studex-deal@wallet', // Internal wallet payment marker
-      });
+      }) as { data: any; message: string };
 
-      // Then process the redemption
-      await processRedemption();
+      setRedeemResult({
+        message: res.message || 'Payment successful!',
+        cashbackAmount: res.data?.cashbackAmount,
+      });
+      
+      setClaimStep('success');
+      await refreshWallet();
     } catch (err: unknown) {
-      setClaimError(err instanceof Error ? err.message : 'Wallet payment failed.');
+      setClaimError(err instanceof Error ? err.message : 'Payment to vendor failed.');
       setClaimStep('payment');
     } finally {
       setPayingWithWallet(false);

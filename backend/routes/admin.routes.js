@@ -15,10 +15,17 @@ const {
   adminCreateOpportunity,
   adminDeleteOpportunity,
   scrapeUrl,
+  getAllVendors,
+  adminCreateVendor,
+  adminPayVendor,
 } = require('../controllers/admin.controller');
 
 // All admin routes require admin auth
 router.use(protectAdmin);
+
+router.get('/vendors', getAllVendors);
+router.post('/vendors', adminCreateVendor);
+router.post('/vendors/:id/pay', adminPayVendor);
 
 router.post('/scrape-url', scrapeUrl);
 

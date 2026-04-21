@@ -40,6 +40,18 @@ interface Opportunity {
   deadline?: any;
 }
 
+interface Vendor {
+  _id: string;
+  businessName: string;
+  email: string;
+  phone?: string;
+  category: string;
+  vendorCode: string;
+  qrCodeUrl: string;
+  totalSales: number;
+  pendingPayable: number;
+}
+
 interface User {
   _id: string;
   name: string;
@@ -76,13 +88,14 @@ export default function AdminPage() {
   const [email, setEmail] = useState('harshkulhade95@gmail.com');
   const [password, setPassword] = useState('');
   const [loginError, setLoginError] = useState('');
-  const [tab, setTab] = useState<'deals' | 'opportunities' | 'users'>('deals');
+  const [tab, setTab] = useState<'deals' | 'opportunities' | 'users' | 'vendors'>('deals');
 
   // Data
   const [stats, setStats] = useState<Stats | null>(null);
   const [deals, setDeals] = useState<Deal[]>([]);
   const [opps, setOpps] = useState<Opportunity[]>([]);
   const [users, setUsers] = useState<User[]>([]);
+  const [vendors, setVendors] = useState<Vendor[]>([]);
   const [loading, setLoading] = useState(false);
 
   // Forms
@@ -136,16 +149,18 @@ export default function AdminPage() {
     if (!admin) return;
     setLoading(true);
     try {
-      const [s, d, o, u] = await Promise.all([
+      const [s, d, o, u, v] = await Promise.all([
         apiFetch('/stats'),
         apiFetch('/deals'),
         apiFetch('/opportunities'),
         apiFetch('/users'),
+        apiFetch('/vendors'),
       ]);
       setStats(s.data);
       setDeals(d.data || []);
       setOpps(o.data || []);
       setUsers(u.data || []);
+      setVendors(v.data || []);
     } catch (e: any) {
       setMsg(`Load error: ${e.message}`);
     } finally {
@@ -260,8 +275,7 @@ export default function AdminPage() {
     setSaving(true);
     try {
       await apiFetch('/opportunities', { method: 'POST', body: JSON.stringify(oppForm) });
-      setMsg('✅ Opportunity created!');
-      setOppForm({ ...EMPTY_OPP });
+      setMsg('✔️ Opportunity added');
       setShowOppForm(false);
       await load();
     } catch (err: any) { setMsg(`❌ ${err.message}`); }
@@ -275,6 +289,30 @@ export default function AdminPage() {
       setMsg('🗑️ Opportunity deleted');
       await load();
     } catch (err: any) { setMsg(`❌ ${err.message}`); }
+  };
+
+  const handlePayVendor = async (id: string) => {
+    if (!confirm('Are you sure you want to settle payments for this vendor?')) return;
+    try {
+      const res = await apiFetch(`/vendors/${id}/pay`, { method: 'POST' });
+      setMsg(`✔️ ${res.message}`);
+      await load();
+    } catch (err: any) {
+      setMsg(`❌ ${err.message}`);
+    }
+  };
+
+  const handleSaveVendor = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      await apiFetch('/vendors', { method: 'POST', body: JSON.stringify(vendorForm) });
+      setMsg('✔️ Vendor created successfully');
+      setShowVendorForm(false);
+      setVendorForm({ businessName: '', email: '', phone: '', category: 'food', address: '' });
+      await load();
+    } catch (err: any) { setMsg(`❌ ${err.message}`); }
+    finally { setSaving(false); }
   };
 
   // ── Auth loading ─────────────────────────────────
@@ -367,8 +405,8 @@ export default function AdminPage() {
         )}
 
         {/* Tabs */}
-        <div className="flex gap-2 border-b border-white/10 pb-0">
-          {(['deals', 'opportunities', 'users'] as const).map(t => (
+        <div className="flex gap-2 border-b border-white/10 pb-4">
+          {(['deals', 'opportunities', 'users', 'vendors'] as const).map(t => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -446,6 +484,12 @@ export default function AdminPage() {
                          {fetchingPhoto ? 'Fetching...' : 'Fetch Photo'}
                        </button>
                     </div>
+                  </Field>
+                  <Field label="Vendor Auth Link (Code)">
+                     <select className={inp} value={(dealForm as any).vendorId || 'admin'} onChange={e => setDealForm(f => ({ ...f, vendorId: e.target.value }))}>
+                       <option value="admin">Global/Admin Created (Default)</option>
+                       {vendors.map(v => <option key={v._id} value={v._id}>{v.businessName} (Code: {v.vendorCode})</option>)}
+                     </select>
                   </Field>
                   <Field label="Valid From">
                     <input type="date" className={inp} value={dealForm.validFrom} onChange={e => setDealForm(f => ({ ...f, validFrom: e.target.value }))} />
@@ -789,7 +833,94 @@ export default function AdminPage() {
           </div>
         )}
 
-      </div>
+        {tab === 'vendors' && (
+          <div className="space-y-6">
+            <div className="flex justify-between items-center">
+              <h2 className="font-bold text-lg">Vendors / Franchises ({vendors.length})</h2>
+              <button
+                onClick={() => setShowVendorForm(v => !v)}
+                className="bg-amber text-black px-4 py-2 rounded-lg text-sm font-bold hover:opacity-90 flex items-center gap-2"
+              >
+                <span className="material-symbols-outlined text-base">add</span>
+                Add Vendor
+              </button>
+            </div>
+
+            {showVendorForm && (
+              <form onSubmit={handleSaveVendor} className="bg-[#1a1a1a] border border-white/10 rounded-2xl p-6 space-y-4">
+                <h3 className="font-bold text-amber uppercase tracking-wide text-sm">New Vendor Config</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <Field label="Business/Resto Name *" required>
+                    <input className={inp} value={vendorForm.businessName} onChange={e => setVendorForm(f => ({ ...f, businessName: e.target.value }))} required placeholder="e.g. Chai Sutta Bar" />
+                  </Field>
+                  <Field label="Email Address">
+                     <input type="email" className={inp} value={vendorForm.email} onChange={e => setVendorForm(f => ({ ...f, email: e.target.value }))} placeholder="csb@example.com (Auto generated if blank)" />
+                  </Field>
+                  <Field label="Phone">
+                    <input className={inp} value={vendorForm.phone} onChange={e => setVendorForm(f => ({ ...f, phone: e.target.value }))} placeholder="Will act as login ID" />
+                  </Field>
+                  <Field label="Location/Address">
+                    <input className={inp} value={vendorForm.address} onChange={e => setVendorForm(f => ({ ...f, address: e.target.value }))} />
+                  </Field>
+                </div>
+                <div className="pt-4 border-t border-white/5 flex gap-3 justify-end">
+                  <button type="button" onClick={() => setShowVendorForm(false)} className="px-5 py-2 hover:bg-white/5 rounded-xl font-bold text-sm">Cancel</button>
+                  <button type="submit" disabled={saving} className="bg-white text-black px-6 py-2 rounded-xl font-bold tracking-wide hover:opacity-90 disabled:opacity-50">
+                    {saving ? 'Creating...' : 'Create Vendor & Generate Assets'}
+                  </button>
+                </div>
+              </form>
+            )}
+
+            <div className="bg-[#1a1a1a] border border-white/5 rounded-2xl overflow-hidden overflow-x-auto">
+              <table className="w-full text-left border-collapse min-w-[800px]">
+                <thead>
+                  <tr className="bg-black/40 text-xs uppercase tracking-wider text-muted">
+                    <th className="p-4 font-bold border-b border-white/5 whitespace-nowrap">QR Link</th>
+                    <th className="p-4 font-bold border-b border-white/5 whitespace-nowrap">Business / Vendor</th>
+                    <th className="p-4 font-bold border-b border-white/5 whitespace-nowrap">Vendor Code</th>
+                    <th className="p-4 font-bold border-b border-white/5 whitespace-nowrap text-right text-emerald-400">Total Soles (100%)</th>
+                    <th className="p-4 font-bold border-b border-white/5 whitespace-nowrap text-right">StudEX Cut (5%)</th>
+                    <th className="p-4 font-bold border-b border-white/5 whitespace-nowrap text-right text-amber">Payable Return</th>
+                    <th className="p-4 font-bold border-b border-white/5 text-center">Settle Dues</th>
+                  </tr>
+                </thead>
+                <tbody className="text-sm">
+                  {vendors.map(v => (
+                    <tr key={v._id} className="border-b border-white/5 hover:bg-white/5 transition-colors group">
+                      <td className="p-4 font-medium max-w-[200px] text-white">
+                        {v.qrCodeUrl ? (
+                           <img src={v.qrCodeUrl} className="w-10 h-10 object-contain rounded-md bg-white p-1" onClick={() => setPreviewImg(v.qrCodeUrl || null)} />
+                        ) : 'No QR'}
+                      </td>
+                      <td className="p-4">
+                        <div className="font-bold">{v.businessName}</div>
+                        <div className="text-xs text-muted font-mono">{v.email}</div>
+                      </td>
+                      <td className="p-4 font-mono font-bold tracking-widest text-[#FFC107]">{v.vendorCode}</td>
+                      <td className="p-4 text-right font-mono text-emerald-400">₹{v.totalSales?.toFixed(2) || '0.00'}</td>
+                      <td className="p-4 text-right font-mono text-muted">₹{(v.totalSales ? v.totalSales * 0.05 : 0).toFixed(2)}</td>
+                      <td className="p-4 text-right font-bold font-mono text-amber text-lg">₹{v.pendingPayable?.toFixed(2) || '0.00'}</td>
+                      <td className="p-4 text-right relative">
+                        <button
+                          onClick={() => handlePayVendor(v._id)}
+                          disabled={!v.pendingPayable || v.pendingPayable <= 0}
+                          className="bg-amber text-black px-4 py-2 rounded-lg text-xs font-bold transition-all disabled:opacity-20 flex gap-2 justify-end float-right"
+                        >
+                          <span className="material-symbols-outlined text-sm">payments</span>
+                          Pay to Vendor
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                  {vendors.length === 0 && (
+                    <tr><td colSpan={7} className="p-8 text-center text-muted italic">No franchises/vendors enlisted yet.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
 
       {/* Image Preview Modal */}
       {previewImg && (

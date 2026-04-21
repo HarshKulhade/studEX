@@ -8,11 +8,15 @@ const {
   generateRedemption,
   getMyRedemptions,
   getRedemptionById,
+  payVendor,
 } = require('../controllers/redemption.controller');
 const validate = require('../middleware/validate');
 
 // All routes in this file are already protected at server.js level
 // by the protectStudent middleware.
+
+// POST /api/redemptions/pay
+router.post('/pay', payVendor);
 
 // POST /api/redemptions/generate
 router.post(

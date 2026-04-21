@@ -29,6 +29,10 @@ const create = async (data) => {
     subscriptionExpiresAt: null,
     otp: null,
     otpExpiry: null,
+    vendorCode: data.vendorCode || null,
+    qrCodeUrl: data.qrCodeUrl || null,
+    pendingPayable: 0,
+    totalSales: 0,
     createdAt: now,
     updatedAt: now,
   };
@@ -51,6 +55,13 @@ const findByEmail = async (email) => {
 
 const findByPhone = async (phone) => {
   const snap = await col().where('phone', '==', phone).limit(1).get();
+  if (snap.empty) return null;
+  const doc = snap.docs[0];
+  return { _id: doc.id, ...doc.data() };
+};
+
+const findByVendorCode = async (code) => {
+  const snap = await col().where('vendorCode', '==', code.toUpperCase()).limit(1).get();
   if (snap.empty) return null;
   const doc = snap.docs[0];
   return { _id: doc.id, ...doc.data() };
@@ -89,12 +100,21 @@ const save = async (vendor) => {
   return findByIdAndUpdate(_id, { ...data, updatedAt: new Date() });
 };
 
+const find = async (query = {}) => {
+  let q = col();
+  Object.entries(query).forEach(([k, v]) => { q = q.where(k, '==', v); });
+  const snap = await q.get();
+  return snap.docs.map(d => ({ _id: d.id, ...d.data() }));
+};
+
 module.exports = {
   create,
   findById,
   findByEmail,
   findByPhone,
+  findByVendorCode,
   findOne,
+  find,
   findByIdAndUpdate,
   save,
 };
