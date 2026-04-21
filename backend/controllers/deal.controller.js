@@ -11,9 +11,10 @@ const { filterByRadius, haversineDistance } = require('../utils/geoFilter');
 // ─────────────────────────────────────────────────
 const getNearbyDeals = async (req, res, next) => {
   try {
-    const { lat, lng, category } = req.query;
+    const { lat, lng, category, radius } = req.query;
     const page = Math.max(1, parseInt(req.query.page, 10) || 1);
     const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 50));
+    const searchRadius = parseInt(radius, 10) || 999999;
 
     if (!lat || !lng) {
       return ApiResponse.error(res, 400, 'lat and lng query parameters are required.');
@@ -26,7 +27,7 @@ const getNearbyDeals = async (req, res, next) => {
       return ApiResponse.error(res, 400, 'lat and lng must be valid numbers.');
     }
 
-    // Fetch all active deals (no radius filter — show all, sort by distance)
+    // Fetch all active deals (sort and filter in-memory since Firestore lacks robust geo-queries)
     const query = { isActive: true, validUntil: { $gt: new Date() } };
     if (category) query.category = category;
 
@@ -46,16 +47,27 @@ const getNearbyDeals = async (req, res, next) => {
       return { ...plain, distanceMetres };
     });
 
+    // Filter by radius
+    let filteredDeals = dealsWithDistance.filter((d) => {
+      // If deal has coordinates, check if it's within radius
+      if (d.distanceMetres !== null) {
+        return d.distanceMetres <= searchRadius;
+      }
+      // If deal lacks coordinates (online deals, campus-wide deals, etc.):
+      // Only show them in "City" mode (large radius). Exclude from strict 2km searches.
+      return searchRadius >= 50000;
+    });
+
     // Sort: deals with location first (nearest), then no-location deals
-    dealsWithDistance.sort((a, b) => {
+    filteredDeals.sort((a, b) => {
       if (a.distanceMetres !== null && b.distanceMetres !== null) return a.distanceMetres - b.distanceMetres;
       if (a.distanceMetres !== null) return -1;
       if (b.distanceMetres !== null) return 1;
       return 0;
     });
 
-    const total = dealsWithDistance.length;
-    const paginated = dealsWithDistance.slice((page - 1) * limit, page * limit);
+    const total = filteredDeals.length;
+    const paginated = filteredDeals.slice((page - 1) * limit, page * limit);
 
     // Populate vendor info for vendor deals; admin deals already have all fields
     const dealsWithInfo = await Promise.all(
