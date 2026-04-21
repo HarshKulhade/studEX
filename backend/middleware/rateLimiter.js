@@ -20,19 +20,20 @@ const generalLimiter = rateLimit({
 
 /**
  * Strict auth rate limiter.
- * Applied to authentication endpoints: 10 requests per 15 minutes per IP.
- * Prevents brute-force login and OTP attacks.
+ * Applied to authentication endpoints.
+ * Only FAILED attempts count — successful logins are not penalised.
+ * Prevents brute-force without locking out real users.
  */
 const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes (fixed — not env-configurable for security)
-  max: 10,
+  windowMs: parseInt(process.env.AUTH_RATE_LIMIT_WINDOW_MS, 10) || 5 * 60 * 1000, // 5 minutes
+  max: parseInt(process.env.AUTH_RATE_LIMIT_MAX, 10) || 50,
   standardHeaders: true,
   legacyHeaders: false,
   message: {
     success: false,
-    message: 'Too many authentication attempts. Please try again in 15 minutes.',
+    message: 'Too many failed login attempts. Please try again in 5 minutes.',
   },
-  skipSuccessfulRequests: false,
+  skipSuccessfulRequests: true, // only failed (4xx/5xx) responses count against the limit
 });
 
 /**
