@@ -17,6 +17,16 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     images: ['/og-image.png'],
   },
+  manifest: '/manifest.json',
+  appleWebApp: {
+    capable: true,
+    title: 'StudEX',
+    statusBarStyle: 'default',
+  },
+  icons: {
+    apple: '/apple-icon.png',
+  },
+  themeColor: '#e8a020',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
