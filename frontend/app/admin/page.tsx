@@ -52,7 +52,9 @@ interface User {
 interface Stats { totalUsers: number; totalDeals: number; totalVendors: number; }
 
 const EMPTY_DEAL = {
-  shopName: '', title: '', offer: '', minOrderValue: '99', rating: '4.0', category: 'food',
+  shopName: '', title: '', offer: '', minOrderValue: '99', 
+  discountType: 'percentage', discountValue: '',
+  rating: '4.0', category: 'food',
   address: '', lat: '', lng: '', googleMapsUrl: '', description: '', coverImageUrl: '',
   validFrom: new Date().toISOString().slice(0, 10),
   validUntil: new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10),
@@ -229,6 +231,8 @@ export default function AdminPage() {
       shopName: deal.shopName || '',
       title: deal.title || '',
       offer: deal.offer || '',
+      discountType: deal.discountType || 'percentage',
+      discountValue: deal.discountValue !== undefined ? String(deal.discountValue) : '',
       minOrderValue: deal.minOrderValue !== undefined ? String(deal.minOrderValue) : '99',
       rating: String(deal.rating || '4.0'),
       category: deal.category || 'food',
@@ -399,8 +403,18 @@ export default function AdminPage() {
                   <Field label="Deal Title">
                     <input className={inp} value={dealForm.title} onChange={e => setDealForm(f => ({ ...f, title: e.target.value }))} placeholder="Same as shop name if blank" />
                   </Field>
-                  <Field label="Offer (e.g. 15% off on all items) *">
-                    <input className={inp} value={dealForm.offer} onChange={e => setDealForm(f => ({ ...f, offer: e.target.value }))} required placeholder="15% off on all items" />
+                  <Field label="Discount Type">
+                    <select className={inp} value={dealForm.discountType} onChange={e => setDealForm(f => ({ ...f, discountType: e.target.value }))}>
+                      <option value="percentage">% Off</option>
+                      <option value="flat">Flat ₹ Off</option>
+                      <option value="bogo">Buy 1 Get 1 (BOGO)</option>
+                    </select>
+                  </Field>
+                  <Field label={dealForm.discountType === 'percentage' ? "Discount Value (%) *" : "Discount Value (₹) *"}>
+                    <input type="number" min="0" disabled={dealForm.discountType === 'bogo'} className={inp} value={dealForm.discountValue} onChange={e => setDealForm(f => ({ ...f, discountValue: e.target.value }))} placeholder={dealForm.discountType === 'bogo' ? "N/A" : "e.g. 15"} />
+                  </Field>
+                  <Field label="Offer Display Text" required>
+                    <input className={inp} value={dealForm.offer} onChange={e => setDealForm(f => ({ ...f, offer: e.target.value }))} required placeholder="e.g. 15% off on all items" />
                   </Field>
                   <Field label="Min Order Value (₹)">
                     <input type="number" min="0" className={inp} value={dealForm.minOrderValue} onChange={e => setDealForm(f => ({ ...f, minOrderValue: e.target.value }))} placeholder="e.g. 99" />

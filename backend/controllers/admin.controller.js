@@ -67,8 +67,10 @@ const adminCreateDeal = async (req, res, next) => {
       googleMapsUrl: req.body.googleMapsUrl || ((lat && lng)
         ? `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`
         : (address ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}` : '')),
-      discountType: 'percentage',
-      discountValue: parseFloat(offer) || 0,
+      discountType: req.body.discountType || 'percentage',
+      discountValue: req.body.discountValue !== undefined && req.body.discountValue !== '' 
+                     ? parseFloat(req.body.discountValue) 
+                     : (req.body.discountType === 'bogo' ? 0 : parseFloat(offer) || 0),
       minOrderValue: minOrderValue !== undefined ? parseFloat(minOrderValue) : 99,
       cashbackAmount: 0,
       validFrom: validFrom ? new Date(validFrom) : now,
@@ -107,7 +109,13 @@ const adminUpdateDeal = async (req, res, next) => {
     if (shopName !== undefined) updates.shopName = shopName;
     if (title !== undefined) updates.title = title;
     if (description !== undefined) updates.description = description;
-    if (offer !== undefined) { updates.offer = offer; updates.discountValue = parseFloat(offer) || 0; }
+    if (offer !== undefined) updates.offer = offer;
+    if (req.body.discountType !== undefined) updates.discountType = req.body.discountType;
+    if (req.body.discountValue !== undefined && req.body.discountValue !== '') {
+       updates.discountValue = parseFloat(req.body.discountValue);
+    } else if (req.body.discountType === 'bogo') {
+       updates.discountValue = 0;
+    }
     if (rating !== undefined) updates.rating = parseFloat(rating);
     if (category !== undefined) updates.category = category;
     if (address !== undefined) updates.address = address;

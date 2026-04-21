@@ -116,8 +116,9 @@ function calculateDiscount(deal: DealDetail, amount: number): { discount: number
   }
 
   if (deal.discountType === 'flat') {
-    if (amount < deal.discountValue) {
-      return { discount: 0, finalAmount: amount, eligible: false, reason: `Minimum order ₹${deal.discountValue} required` };
+    const minAmount = typeof deal.minOrderValue === 'number' ? deal.minOrderValue : (deal.discountValue > 0 ? deal.discountValue : 0);
+    if (amount < minAmount) {
+      return { discount: 0, finalAmount: amount, eligible: false, reason: `Minimum order ₹${minAmount} required` };
     }
     return { discount: deal.discountValue, finalAmount: amount - deal.discountValue, eligible: true, reason: '' };
   }
