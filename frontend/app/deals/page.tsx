@@ -81,6 +81,7 @@ export default function DealsPage() {
   const [search, setSearch] = useState('');
   const [fetching, setFetching] = useState(false);
   const [selectedDealId, setSelectedDealId] = useState<string | null>(null);
+  const [nearbyOnly, setNearbyOnly] = useState(true); // true = 2km, false = whole city
 
   // Location state
   const [userLoc, setUserLoc] = useState<{ lat: number; lng: number } | null>(null);
@@ -156,7 +157,7 @@ export default function DealsPage() {
       const params: { lat: number; lng: number; radius?: number; category?: string; page?: number; limit?: number } = {
         lat: userLoc.lat,
         lng: userLoc.lng,
-        radius: 2000, // strict 2km
+        radius: nearbyOnly ? 2000 : 999999, // 2km or entire city
         limit: 50,
         ...(category !== 'All' ? { category: category.toLowerCase() } : {}),
       };
@@ -167,7 +168,7 @@ export default function DealsPage() {
     } finally {
       setFetching(false);
     }
-  }, [token, userLoc, category]);
+  }, [token, userLoc, category, nearbyOnly]);
 
   useEffect(() => { fetchDeals(); }, [fetchDeals]);
 
@@ -187,27 +188,51 @@ export default function DealsPage() {
       <header className="bg-[#F7F4EF] sticky top-0 z-40 px-6 py-4 space-y-3">
         <div className="flex justify-between items-center">
           <span className="font-headline font-black text-2xl tracking-tighter text-ink uppercase">Deals</span>
-          <button
-            onClick={requestLocation}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-bold snappy ${
-              locState === 'granted'
-                ? 'bg-green-100 text-green-700'
-                : locState === 'denied'
-                ? 'bg-red-100 text-red-600'
-                : 'bg-surface-container-high text-muted'
-            }`}
-          >
-            <span className="material-symbols-outlined text-sm">
-              {locState === 'granted' ? 'location_on' : locState === 'denied' ? 'location_off' : 'my_location'}
-            </span>
-            <span className="font-mono text-[11px] uppercase tracking-wide max-w-[120px] truncate">
-              {locState === 'requesting'
-                ? 'Getting location…'
-                : locState === 'denied'
-                ? (areaName || 'Location denied')
-                : (areaName || '2km radius')}
-            </span>
-          </button>
+          <div className="flex items-center gap-2">
+            {/* Radius Toggle */}
+            <div className="flex items-center gap-2 bg-surface-container-lowest border border-outline-variant/40 rounded-full px-1 py-1">
+              <button
+                onClick={() => setNearbyOnly(true)}
+                className={`flex items-center gap-1 px-3 py-1 rounded-full text-[11px] font-bold font-mono uppercase tracking-wide snappy transition-all ${
+                  nearbyOnly ? 'bg-ink text-white' : 'text-muted hover:text-ink'
+                }`}
+              >
+                <span className="material-symbols-outlined text-[13px]">near_me</span>
+                2km
+              </button>
+              <button
+                onClick={() => setNearbyOnly(false)}
+                className={`flex items-center gap-1 px-3 py-1 rounded-full text-[11px] font-bold font-mono uppercase tracking-wide snappy transition-all ${
+                  !nearbyOnly ? 'bg-ink text-white' : 'text-muted hover:text-ink'
+                }`}
+              >
+                <span className="material-symbols-outlined text-[13px]">location_city</span>
+                City
+              </button>
+            </div>
+            {/* Location button */}
+            <button
+              onClick={requestLocation}
+              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-full text-sm font-bold snappy ${
+                locState === 'granted'
+                  ? 'bg-green-100 text-green-700'
+                  : locState === 'denied'
+                  ? 'bg-red-100 text-red-600'
+                  : 'bg-surface-container-high text-muted'
+              }`}
+            >
+              <span className="material-symbols-outlined text-sm">
+                {locState === 'granted' ? 'location_on' : locState === 'denied' ? 'location_off' : 'my_location'}
+              </span>
+              <span className="font-mono text-[10px] uppercase tracking-wide max-w-[80px] truncate hidden sm:block">
+                {locState === 'requesting'
+                  ? 'Getting…'
+                  : locState === 'denied'
+                  ? (areaName || 'Denied')
+                  : (areaName || (nearbyOnly ? '2km' : 'City'))}
+              </span>
+            </button>
+          </div>
         </div>
 
         {/* Search */}
@@ -246,7 +271,7 @@ export default function DealsPage() {
         {/* Title row */}
         <div className="flex items-end justify-between">
           <h1 className="font-headline font-extrabold text-4xl uppercase tracking-tighter text-ink leading-tight">
-            Nearby<br />Deals
+            {nearbyOnly ? 'Nearby' : 'City'}<br />Deals
           </h1>
           <p className="font-mono text-xs uppercase tracking-widest text-muted mb-1">
             {fetching ? 'Loading…' : `${filtered.length} found`}
@@ -288,10 +313,20 @@ export default function DealsPage() {
         ) : filtered.length === 0 ? (
           <div className="text-center py-16">
             <span className="material-symbols-outlined text-6xl text-muted">storefront</span>
-            <p className="font-headline font-bold text-2xl uppercase tracking-tight text-ink mt-4">No Deals Nearby</p>
+            <p className="font-headline font-bold text-2xl uppercase tracking-tight text-ink mt-4">No Deals Found</p>
             <p className="font-body text-on-surface-variant mt-2 text-sm">
-              {locState === 'denied' ? 'Enable location for accurate results.' : 'No deals found within 2km of your location.'}
+              {nearbyOnly
+                ? 'No deals within 2km. Try switching to City view!'
+                : 'No deals found in the city yet.'}
             </p>
+            {nearbyOnly && (
+              <button
+                onClick={() => setNearbyOnly(false)}
+                className="mt-4 bg-ink text-white px-6 py-3 rounded-full font-headline font-bold text-sm uppercase tracking-widest snappy"
+              >
+                Show City Deals
+              </button>
+            )}
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-4">
