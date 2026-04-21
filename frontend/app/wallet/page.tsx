@@ -39,7 +39,9 @@ function formatDate(ts: unknown) {
       d = new Date(ts as string | number);
     }
     if (isNaN(d.getTime())) return '';
-    return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+    const datePart = d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+    const timePart = d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+    return `${datePart} · ${timePart}`;
   } catch {
     return '';
   }
@@ -281,7 +283,10 @@ export default function WalletPage() {
                     </div>
                     <div>
                       <p className="font-body font-bold text-sm text-ink">{SOURCE_LABELS[t.source] || t.source}</p>
-                      <p className="font-mono text-[10px] uppercase tracking-wider text-muted">{formatDate(t.createdAt)}</p>
+                      {t.description && (
+                        <p className="font-body text-xs text-on-surface-variant mt-0.5 max-w-[180px] truncate">{t.description}</p>
+                      )}
+                      <p className="font-mono text-[10px] uppercase tracking-wider text-muted mt-0.5">{formatDate(t.createdAt)}</p>
                     </div>
                   </div>
                   <span className={`font-mono text-base font-bold ${t.type === 'credit' ? 'text-green-600' : 'text-tertiary'}`}>
