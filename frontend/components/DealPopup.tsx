@@ -51,6 +51,7 @@ type ClaimStep =
   | 'unverified'      // Student not verified popup
   | 'enter-amount'    // Enter purchase amount
   | 'payment'         // QR scanner + wallet pay
+  | 'secret-code'     // Enter vendor secret code at counter
   | 'processing'      // Processing payment
   | 'success';        // Transaction complete
 
@@ -330,12 +331,6 @@ export default function DealPopup({ dealId, onClose }: DealPopupProps) {
       return;
     }
 
-    const { eligible, reason } = calculateDiscount(deal, amount);
-    if (!eligible && reason) {
-      setClaimError(reason);
-      return;
-    }
-
     setClaimError('');
     setDestinationCode('');
     setClaimStep('payment');
@@ -416,6 +411,45 @@ export default function DealPopup({ dealId, onClose }: DealPopupProps) {
       return;
     }
     setDestinationCode(manualCode.trim());
+  };
+
+  /** Pay at counter */
+  const [secretCode, setSecretCode] = useState('');
+  const handlePayAtCounter = async () => {
+    if (!deal || !token) return;
+    if (!secretCode.trim()) {
+      setClaimError('Please enter the vendor secret code.');
+      return;
+    }
+
+    const amount = parseFloat(orderAmount);
+    const { finalAmount } = calculateDiscount(deal, amount);
+
+    setPayingWithWallet(true); // Reusing this for loading state
+    setClaimStep('processing');
+
+    try {
+      const res = await redemptionApi.payAtCounter(token, {
+        dealId,
+        vendorCode: destinationCode,
+        vendorSecretCode: secretCode.trim(),
+        amount: finalAmount,
+      }) as { data: any; message: string };
+
+      setRedeemResult({
+        message: res.message || 'Payment successful!',
+        cashbackAmount: res.data?.cashbackAmount,
+        qrToken: res.data?.transactionId, // Store transactionId as qrToken for display
+      });
+      
+      setClaimStep('success');
+      await refreshWallet();
+    } catch (err: unknown) {
+      setClaimError(err instanceof Error ? err.message : 'Counter payment failed.');
+      setClaimStep('secret-code');
+    } finally {
+      setPayingWithWallet(false);
+    }
   };
 
   /* ─── Computed values ─── */
@@ -838,29 +872,21 @@ export default function DealPopup({ dealId, onClose }: DealPopupProps) {
                                 <p className="font-mono text-[10px] uppercase tracking-wider text-amber">Wallet Balance</p>
                                 <p className="font-mono text-2xl font-bold">₹{walletBalance.toFixed(2)}</p>
                               </div>
-                              {walletBalance >= discountCalc.finalAmount ? (
-                                <span className="material-symbols-outlined text-green-400 text-2xl" style={{ fontVariationSettings: "'FILL' 1" }}>check_circle</span>
-                              ) : (
-                                <span className="material-symbols-outlined text-terracotta text-2xl">warning</span>
-                              )}
+                              <span className="material-symbols-outlined text-terracotta text-2xl">construction</span>
                             </div>
                           </div>
+                          
+                          <div className="p-3 bg-amber/10 text-amber-800 rounded-sm text-xs font-body mb-3 border border-amber/20">
+                            <span className="font-bold">Notice:</span> Wallet topup functionality is currently in development. Please use the Pay at Counter button.
+                          </div>
+                          
                           <button
-                            onClick={handleWalletPay}
-                            disabled={payingWithWallet || walletBalance < discountCalc.finalAmount}
-                            className="w-full bg-amber text-ink py-4 rounded-full font-headline font-bold text-sm tracking-[0.2em] uppercase active:scale-[0.98] snappy flex items-center justify-center gap-3 disabled:opacity-40"
+                            disabled={true}
+                            className="w-full bg-surface-container-high text-muted py-4 rounded-full font-headline font-bold text-sm tracking-[0.2em] uppercase cursor-not-allowed flex items-center justify-center gap-3"
                           >
                             <span className="material-symbols-outlined text-lg">payments</span>
-                            {payingWithWallet ? 'Processing…' : `Pay ₹${discountCalc.finalAmount.toFixed(2)} from Wallet`}
+                            Pay from Wallet
                           </button>
-                          {walletBalance < discountCalc.finalAmount && (
-                            <button
-                              onClick={() => router.push('/wallet')}
-                              className="w-full mt-2 py-3 font-mono text-xs text-primary uppercase tracking-widest hover:text-ink snappy"
-                            >
-                              Top up wallet →
-                            </button>
-                          )}
                         </div>
                         
                         <div className="flex items-center gap-4 py-2 my-2">
@@ -870,8 +896,8 @@ export default function DealPopup({ dealId, onClose }: DealPopupProps) {
                         </div>
                         
                         <button
-                          onClick={() => { setClaimStep('processing'); processRedemption(); }}
-                          className="w-full bg-surface-container-high text-ink py-4 rounded-full font-headline font-bold text-sm tracking-[0.2em] uppercase active:scale-[0.98] snappy flex items-center justify-center gap-3 border border-outline-variant hover:border-ink"
+                          onClick={() => { setClaimError(''); setClaimStep('secret-code'); }}
+                          className="w-full bg-ink text-white py-4 rounded-full font-headline font-bold text-sm tracking-[0.2em] uppercase active:scale-[0.98] snappy flex items-center justify-center gap-3"
                         >
                           <span className="material-symbols-outlined text-lg">storefront</span>
                           Pay at Counter
@@ -889,6 +915,57 @@ export default function DealPopup({ dealId, onClose }: DealPopupProps) {
                     >
                       ← Change Amount
                     </button>
+                  </div>
+                </section>
+              )}
+
+              {/* ── Secret Code Step ── */}
+              {claimStep === 'secret-code' && (
+                <section className="mx-6 mt-8">
+                  <div className="bg-surface-container-lowest p-6 editorial-shadow">
+                    <h4 className="font-headline font-bold text-lg text-ink uppercase tracking-tight mb-2">
+                      Vendor Verification
+                    </h4>
+                    <p className="font-body text-sm text-on-surface-variant mb-6">
+                      Please ask the vendor to enter their 4-digit Secret Code to confirm this counter payment.
+                    </p>
+
+                    <div className="mb-6">
+                      <p className="font-mono text-[10px] text-muted uppercase tracking-wider mb-2">
+                        Vendor Secret Code
+                      </p>
+                      <input
+                        type="password"
+                        placeholder="••••"
+                        maxLength={10}
+                        value={secretCode}
+                        onChange={(e) => { setSecretCode(e.target.value); setClaimError(''); }}
+                        className="w-full bg-surface-container-high px-4 py-4 font-mono text-2xl tracking-[0.5em] text-center text-ink rounded-sm focus:outline-none focus:ring-2 focus:ring-amber snappy placeholder:text-muted"
+                      />
+                    </div>
+
+                    {claimError && (
+                      <div className="p-3 bg-error-container text-on-error-container rounded-sm text-sm font-body mb-4">
+                        {claimError}
+                      </div>
+                    )}
+
+                    <div className="space-y-3">
+                      <button
+                        onClick={handlePayAtCounter}
+                        disabled={!secretCode.trim()}
+                        className="w-full bg-amber text-ink py-4 rounded-full font-headline font-bold text-sm tracking-[0.2em] uppercase active:scale-[0.98] snappy flex items-center justify-center gap-3 disabled:opacity-40"
+                      >
+                        <span className="material-symbols-outlined text-lg">verified</span>
+                        Verify & Complete
+                      </button>
+                      <button
+                        onClick={() => { setClaimStep('payment'); setSecretCode(''); setClaimError(''); }}
+                        className="w-full py-3 font-mono text-xs text-muted uppercase tracking-widest hover:text-ink snappy"
+                      >
+                        ← Back
+                      </button>
+                    </div>
                   </div>
                 </section>
               )}

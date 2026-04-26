@@ -18,6 +18,9 @@ const validate = require('../middleware/validate');
 // POST /api/redemptions/pay
 router.post('/pay', payVendor);
 
+// POST /api/redemptions/pay-at-counter
+router.post('/pay-at-counter', require('../controllers/redemption.controller').payAtCounter);
+
 // POST /api/redemptions/generate
 router.post(
   '/generate',

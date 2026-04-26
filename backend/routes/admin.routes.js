@@ -25,6 +25,8 @@ router.use(protectAdmin);
 
 router.get('/vendors', getAllVendors);
 router.post('/vendors', adminCreateVendor);
+router.delete('/vendors/:id', require('../controllers/admin.controller').adminDeleteVendor);
+router.get('/vendors/:id/transactions', require('../controllers/admin.controller').getVendorTransactions);
 router.post('/vendors/:id/pay', adminPayVendor);
 
 router.post('/scrape-url', scrapeUrl);

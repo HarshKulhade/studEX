@@ -211,6 +211,7 @@ const payVendor = async (req, res, next) => {
       type: 'debit',
       amount: payAmount,
       source: 'deal_redemption',
+      referenceId: vendor._id,
       description: `Payment to ${vendor.businessName} (Code: ${vendor.vendorCode})`,
     });
 
@@ -244,4 +245,81 @@ const payVendor = async (req, res, next) => {
   }
 };
 
-module.exports = { generateRedemption, getMyRedemptions, getRedemptionById, payVendor };
+// ─────────────────────────────────────────────────
+//  POST /api/redemptions/pay-at-counter
+// ─────────────────────────────────────────────────
+const payAtCounter = async (req, res, next) => {
+  try {
+    const { dealId, vendorCode, vendorSecretCode, amount } = req.body;
+    const studentId = req.user._id;
+    const payAmount = parseFloat(amount);
+
+    if (!vendorCode || !vendorSecretCode || !payAmount || payAmount <= 0) {
+      return ApiResponse.error(res, 400, 'Invalid payment details.');
+    }
+
+    const deal = await Deal.findById(dealId);
+    if (!deal || !deal.isActive) {
+      return ApiResponse.error(res, 404, 'Deal is unavailable.');
+    }
+
+    const vendor = await Vendor.findByVendorCode(vendorCode);
+    if (!vendor) {
+      return ApiResponse.error(res, 404, `Invalid Vendor Code: ${vendorCode}`);
+    }
+
+    if (vendor.vendorSecretCode !== vendorSecretCode) {
+      return ApiResponse.error(res, 400, 'Invalid Vendor Secret Code.');
+    }
+
+    if (deal.vendor !== vendor._id && deal.vendor !== 'admin') {
+      // Validate the code belongs to the right vendor (allowing admin created wildcards)
+      // return ApiResponse.error(res, 400, 'The vendor code does not match this deal provider.');
+    }
+
+    // 1. Log transaction (note: no wallet balance deducted, it's paid at counter)
+    const transaction = await Transaction.create({
+      student: studentId,
+      type: 'debit', // or 'counter_payment'
+      amount: payAmount,
+      source: 'counter_payment',
+      referenceId: vendor._id,
+      description: `Paid at counter to ${vendor.businessName} (Code: ${vendor.vendorCode})`,
+    });
+
+    // 2. Create redemption instantly marked redeemed
+    const qrToken = uuidv4();
+    const redemption = await Redemption.create({
+      student: studentId,
+      deal: dealId,
+      vendor: vendor._id,
+      qrToken,
+      status: 'redeemed',
+      generatedAt: new Date(),
+      expiresAt: new Date(Date.now() + 10 * 60000),
+      redeemedAt: new Date(),
+      cashbackAmount: deal.cashbackAmount || 0,
+      cashbackCredited: false, // Could process later
+    });
+
+    // 3. Increment deal redeemed count
+    deal.redeemedCount = (deal.redeemedCount || 0) + 1;
+    await Deal.save(deal);
+
+    // 4. Update vendor analytics (optional, but good for tracking)
+    vendor.totalSales = (vendor.totalSales || 0) + payAmount;
+    await Vendor.save(vendor);
+
+    return ApiResponse.success(res, 200, `Payment of ₹${payAmount.toFixed(2)} recorded successfully!`, {
+      redemptionId: redemption._id,
+      transactionId: transaction._id,
+      cashbackAmount: redemption.cashbackAmount,
+      vendorName: vendor.businessName,
+      amountPaid: payAmount,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+module.exports = { generateRedemption, getMyRedemptions, getRedemptionById, payVendor, payAtCounter };

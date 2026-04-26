@@ -217,47 +217,24 @@ export default function WalletPage() {
         <section className="bg-surface-container-lowest editorial-shadow p-6 rounded-2xl space-y-4">
           <h2 className="font-headline font-bold text-xl uppercase tracking-tight text-ink">Top Up Wallet</h2>
 
-          <button
-            onClick={() => setShowTopup((p) => !p)}
-            className="w-full flex items-center justify-between p-4 bg-surface-container-high rounded-xl font-body font-bold text-sm text-ink snappy"
-          >
-            Add Money
-            <span className="material-symbols-outlined text-muted">{showTopup ? 'expand_less' : 'expand_more'}</span>
-          </button>
-
-          {showTopup && (
-            <form onSubmit={handleAddMoney} className="space-y-4 pt-2">
-              {topupError && (
-                <div className="p-3 bg-error-container text-on-error-container rounded-lg text-sm">{topupError}</div>
-              )}
-              {topupMsg && (
-                <div className="p-3 bg-surface-container-high text-green-700 font-bold rounded-lg text-sm">{topupMsg}</div>
-              )}
-              <div>
-                <label className="font-mono text-[10px] uppercase tracking-widest text-muted block mb-2">Amount to add</label>
-                <input
-                  type="number"
-                  min={10}
-                  step={1}
-                  required
-                  placeholder="Enter amount (e.g. 500)"
-                  value={topupAmount}
-                  onChange={(e) => setTopupAmount(e.target.value)}
-                  className="input-underline bg-surface-container-high"
-                />
-              </div>
-              <button
-                type="submit"
-                disabled={toppingUp || !topupAmount}
-                className="w-full bg-ink text-white py-4 rounded-full font-headline font-bold uppercase tracking-widest text-sm snappy hover:bg-charcoal disabled:opacity-50 flex items-center justify-center gap-2"
-              >
-                {toppingUp ? 'Initializing…' : 'Proceed to Pay'} <span className="material-symbols-outlined text-base">payments</span>
-              </button>
-              <p className="font-mono text-[10px] text-muted uppercase tracking-wider text-center">
-                Secure payments verified by Razorpay
+          <div className="bg-amber/10 border border-amber/20 rounded-xl p-4 flex items-start gap-3">
+            <span className="material-symbols-outlined text-amber text-2xl flex-shrink-0 mt-0.5">construction</span>
+            <div>
+              <p className="font-body font-bold text-sm text-ink">Payment Gateway Under Development</p>
+              <p className="font-body text-xs text-on-surface-variant mt-1">
+                The wallet top-up functionality is currently being integrated with our secure payment partner. 
+                In the meantime, please use the <strong>Pay at Counter</strong> option when redeeming deals.
               </p>
-            </form>
-          )}
+            </div>
+          </div>
+
+          <button
+            disabled
+            className="w-full flex items-center justify-center gap-2 p-4 bg-surface-container-high rounded-xl font-body font-bold text-sm text-muted cursor-not-allowed opacity-50"
+          >
+            <span className="material-symbols-outlined text-base">lock</span>
+            Add Money — Coming Soon
+          </button>
         </section>
 
         {/* Transaction History */}

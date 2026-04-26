@@ -13,7 +13,7 @@ const col = () => db.collection(COLLECTION);
 const create = async (data) => {
   const now = new Date();
   const doc = {
-    wallet: data.wallet,
+    wallet: data.wallet || null,
     student: data.student,
     type: data.type,        // 'credit' | 'debit'
     amount: data.amount,
@@ -32,6 +32,7 @@ const find = async (query = {}, options = {}) => {
   if (query.student) q = q.where('student', '==', query.student);
   if (query.type) q = q.where('type', '==', query.type);
   if (query.source) q = q.where('source', '==', query.source);
+  if (query.referenceId) q = q.where('referenceId', '==', query.referenceId);
   // NOTE: orderBy on a filtered field requires a Firestore composite index.
   // Sorting in JS avoids that requirement entirely.
   const snap = await q.get();

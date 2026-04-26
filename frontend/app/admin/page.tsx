@@ -50,6 +50,7 @@ interface Vendor {
   qrCodeUrl: string;
   totalSales: number;
   pendingPayable: number;
+  vendorSecretCode?: string;
 }
 
 interface User {
@@ -315,6 +316,38 @@ export default function AdminPage() {
       await load();
     } catch (err: any) { setMsg(`❌ ${err.message}`); }
     finally { setSaving(false); }
+  };
+
+  const [selectedVendorTransactions, setSelectedVendorTransactions] = useState<any[] | null>(null);
+  const [selectedVendorName, setSelectedVendorName] = useState<string>('');
+  const [loadingTransactions, setLoadingTransactions] = useState(false);
+
+  const handleDeleteVendor = async (id: string, name: string) => {
+    if (!confirm(`Are you sure you want to permanently delete vendor: ${name}?`)) return;
+    try {
+      await apiFetch(`/vendors/${id}`, { method: 'DELETE' });
+      setMsg(`🗑️ Vendor ${name} deleted.`);
+      if (selectedVendorTransactions && selectedVendorName === name) {
+        setSelectedVendorTransactions(null);
+      }
+      await load();
+    } catch (err: any) {
+      setMsg(`❌ ${err.message}`);
+    }
+  };
+
+  const handleVendorClick = async (vendor: Vendor) => {
+    setLoadingTransactions(true);
+    setSelectedVendorName(vendor.businessName);
+    try {
+      const res = await apiFetch(`/vendors/${vendor._id}/transactions`);
+      setSelectedVendorTransactions(res.data || []);
+    } catch (err: any) {
+      setMsg(`❌ Failed to load transactions: ${err.message}`);
+      setSelectedVendorTransactions(null);
+    } finally {
+      setLoadingTransactions(false);
+    }
   };
 
   // ── Auth loading ─────────────────────────────────
@@ -880,38 +913,50 @@ export default function AdminPage() {
                   <tr className="bg-black/40 text-xs uppercase tracking-wider text-muted">
                     <th className="p-4 font-bold border-b border-white/5 whitespace-nowrap">QR Link</th>
                     <th className="p-4 font-bold border-b border-white/5 whitespace-nowrap">Business / Vendor</th>
-                    <th className="p-4 font-bold border-b border-white/5 whitespace-nowrap">Vendor Code</th>
-                    <th className="p-4 font-bold border-b border-white/5 whitespace-nowrap text-right text-emerald-400">Total Soles (100%)</th>
+                    <th className="p-4 font-bold border-b border-white/5 whitespace-nowrap">Codes</th>
+                    <th className="p-4 font-bold border-b border-white/5 whitespace-nowrap text-right text-emerald-400">Total Sales (100%)</th>
                     <th className="p-4 font-bold border-b border-white/5 whitespace-nowrap text-right">StudEX Cut (5%)</th>
                     <th className="p-4 font-bold border-b border-white/5 whitespace-nowrap text-right text-amber">Payable Return</th>
-                    <th className="p-4 font-bold border-b border-white/5 text-center">Settle Dues</th>
+                    <th className="p-4 font-bold border-b border-white/5 text-center">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="text-sm">
                   {vendors.map(v => (
-                    <tr key={v._id} className="border-b border-white/5 hover:bg-white/5 transition-colors group">
-                      <td className="p-4 font-medium max-w-[200px] text-white">
+                    <tr key={v._id} className="border-b border-white/5 hover:bg-white/5 transition-colors group cursor-pointer" onClick={() => handleVendorClick(v)}>
+                      <td className="p-4 font-medium max-w-[200px] text-white" onClick={(e) => e.stopPropagation()}>
                         {v.qrCodeUrl ? (
-                           <img src={v.qrCodeUrl} className="w-10 h-10 object-contain rounded-md bg-white p-1" onClick={() => setPreviewImg(v.qrCodeUrl || null)} />
+                           <img src={v.qrCodeUrl} className="w-10 h-10 object-contain rounded-md bg-white p-1 cursor-pointer" onClick={() => setPreviewImg(v.qrCodeUrl || null)} />
                         ) : 'No QR'}
                       </td>
                       <td className="p-4">
                         <div className="font-bold">{v.businessName}</div>
                         <div className="text-xs text-muted font-mono">{v.email}</div>
                       </td>
-                      <td className="p-4 font-mono font-bold tracking-widest text-[#FFC107]">{v.vendorCode}</td>
+                      <td className="p-4 font-mono text-xs">
+                        <div className="text-[#FFC107] font-bold tracking-widest mb-1">ID: {v.vendorCode}</div>
+                        {v.vendorSecretCode && <div className="text-emerald-400 tracking-[0.2em]">PIN: {v.vendorSecretCode}</div>}
+                      </td>
                       <td className="p-4 text-right font-mono text-emerald-400">₹{v.totalSales?.toFixed(2) || '0.00'}</td>
                       <td className="p-4 text-right font-mono text-muted">₹{(v.totalSales ? v.totalSales * 0.05 : 0).toFixed(2)}</td>
                       <td className="p-4 text-right font-bold font-mono text-amber text-lg">₹{v.pendingPayable?.toFixed(2) || '0.00'}</td>
-                      <td className="p-4 text-right relative">
-                        <button
-                          onClick={() => handlePayVendor(v._id)}
-                          disabled={!v.pendingPayable || v.pendingPayable <= 0}
-                          className="bg-amber text-black px-4 py-2 rounded-lg text-xs font-bold transition-all disabled:opacity-20 flex gap-2 justify-end float-right"
-                        >
-                          <span className="material-symbols-outlined text-sm">payments</span>
-                          Pay to Vendor
-                        </button>
+                      <td className="p-4 relative" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex gap-2 justify-end">
+                          <button
+                            onClick={() => handlePayVendor(v._id)}
+                            disabled={!v.pendingPayable || v.pendingPayable <= 0}
+                            className="bg-amber text-black px-4 py-2 rounded-lg text-xs font-bold transition-all disabled:opacity-20 flex gap-2"
+                          >
+                            <span className="material-symbols-outlined text-sm">payments</span>
+                            Pay
+                          </button>
+                          <button
+                            onClick={() => handleDeleteVendor(v._id, v.businessName)}
+                            className="bg-red-900/30 hover:bg-red-900/60 text-red-400 px-3 py-2 rounded-lg text-xs transition-colors"
+                            title="Remove Vendor"
+                          >
+                            <span className="material-symbols-outlined text-sm">delete</span>
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -920,6 +965,55 @@ export default function AdminPage() {
                   )}
                 </tbody>
               </table>
+            </div>
+          </div>
+        )}
+
+        {/* Transactions Modal */}
+        {selectedVendorTransactions !== null && (
+          <div className="fixed inset-0 bg-black/80 z-[100] flex items-center justify-center p-6 cursor-pointer" onClick={() => setSelectedVendorTransactions(null)}>
+            <div className="bg-[#1a1a1a] border border-white/10 rounded-2xl w-full max-w-3xl max-h-[80vh] flex flex-col cursor-default" onClick={(e) => e.stopPropagation()}>
+              <div className="p-6 border-b border-white/10 flex justify-between items-center">
+                <div>
+                  <h3 className="font-bold text-lg">Transactions: {selectedVendorName}</h3>
+                  <p className="text-white/40 text-xs">Complete breakdown of all student payments</p>
+                </div>
+                <button onClick={() => setSelectedVendorTransactions(null)} className="text-white/40 hover:text-white">
+                  <span className="material-symbols-outlined">close</span>
+                </button>
+              </div>
+              <div className="p-6 overflow-y-auto flex-1">
+                {selectedVendorTransactions.length === 0 ? (
+                  <p className="text-white/40 text-center italic">No transactions found for this vendor.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {selectedVendorTransactions.map((tx, idx) => (
+                      <div key={tx._id || idx} className="bg-white/5 border border-white/5 rounded-xl p-4 flex justify-between items-center">
+                        <div>
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="font-bold text-sm text-white">{tx.studentInfo?.name || 'Unknown Student'}</span>
+                            <span className="text-xs text-white/40 font-mono">({tx.studentInfo?.email || 'No email'})</span>
+                          </div>
+                          <div className="text-xs text-white/60 mb-2">{tx.description}</div>
+                          <div className="flex items-center gap-2">
+                            <span className={`text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full font-bold ${
+                              tx.source === 'counter_payment' ? 'bg-indigo-900/40 text-indigo-300' : 'bg-amber/20 text-amber'
+                            }`}>
+                              {tx.source === 'counter_payment' ? 'Pay at Counter' : 'Wallet Transfer'}
+                            </span>
+                            <span className="text-white/40 text-[10px] font-mono">
+                              {new Date(tx.createdAt?._seconds ? tx.createdAt._seconds * 1000 : tx.createdAt).toLocaleString()}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-emerald-400 font-bold font-mono text-lg">₹{tx.amount?.toFixed(2)}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         )}

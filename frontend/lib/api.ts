@@ -125,6 +125,9 @@ export const redemptionApi = {
   payVendor: (token: string, payload: { dealId: string; vendorCode: string; amount: number }) =>
     apiFetch('/api/redemptions/pay', { method: 'POST', body: JSON.stringify(payload) }, token),
 
+  payAtCounter: (token: string, payload: { dealId: string; vendorCode: string; vendorSecretCode: string; amount: number }) =>
+    apiFetch('/api/redemptions/pay-at-counter', { method: 'POST', body: JSON.stringify(payload) }, token),
+
   getMyRedemptions: (token: string) =>
     apiFetch('/api/redemptions/my', {}, token),
 };

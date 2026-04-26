@@ -8,7 +8,23 @@ import BottomNav from '@/components/BottomNav';
 
 interface DashboardData {
   wallet: { balance: number; totalEarned: number; totalWithdrawn: number };
-  recentRedemptions: Array<{ _id: string; deal: string; status: string; cashbackAmount: number; generatedAt: unknown }>;
+  recentRedemptions: Array<{
+    _id: string;
+    deal: string;
+    status: string;
+    cashbackAmount: number;
+    generatedAt: unknown;
+    redeemedAt: unknown;
+    dealInfo?: { shopName: string; offer: string };
+  }>;
+  recentTransactions: Array<{
+    _id: string;
+    type: string;
+    amount: number;
+    source: string;
+    description: string;
+    createdAt: unknown;
+  }>;
   recentPrintJobs: Array<{ _id: string; fileName: string; status: string; totalCost: number; createdAt: unknown }>;
   nearbyDealsCount: number;
   profile: {
@@ -165,8 +181,8 @@ export default function DashboardPage() {
                   <p className="font-mono text-base font-bold text-white">₹{(data?.wallet?.totalWithdrawn ?? 0).toFixed(2)}</p>
                 </div>
               </div>
-              <Link href="/wallet" className="mt-4 inline-flex items-center gap-2 bg-amber text-ink px-5 py-2 rounded-full font-headline font-bold text-xs uppercase snappy hover:opacity-90">
-                Add Money <span className="material-symbols-outlined text-sm">add_circle</span>
+              <Link href="/wallet" className="mt-4 inline-flex items-center gap-2 bg-white/20 text-white/60 px-5 py-2 rounded-full font-headline font-bold text-xs uppercase snappy cursor-default">
+                <span className="material-symbols-outlined text-sm">construction</span> Top-up Coming Soon
               </Link>
             </div>
           </div>
@@ -230,11 +246,55 @@ export default function DashboardPage() {
             <div className="space-y-3">
               {data?.recentRedemptions.map((r) => (
                 <div key={r._id} className="bg-surface-container-lowest editorial-shadow p-4 rounded-xl flex justify-between items-center">
-                  <div>
-                    <p className="font-body font-bold text-sm text-ink capitalize">{r.status}</p>
-                    <p className="font-mono text-[10px] uppercase tracking-wider text-muted">{formatDate(r.generatedAt)}</p>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-body font-bold text-sm text-ink truncate">{r.dealInfo?.shopName || 'Deal Redeemed'}</p>
+                    {r.dealInfo?.offer && (
+                      <p className="font-mono text-[10px] text-green-600 uppercase tracking-wider mt-0.5">{r.dealInfo.offer}</p>
+                    )}
+                    <p className="font-mono text-[10px] uppercase tracking-wider text-muted mt-1">{formatDate(r.redeemedAt || r.generatedAt)}</p>
                   </div>
-                  <span className="font-mono text-sm font-bold text-green-600">+₹{r.cashbackAmount}</span>
+                  <div className="text-right flex-shrink-0 ml-3">
+                    <span className={`inline-block font-mono text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full font-bold ${
+                      r.status === 'redeemed' ? 'bg-green-100 text-green-700' : 
+                      r.status === 'generated' ? 'bg-amber/20 text-amber' : 
+                      'bg-surface-container-high text-muted'
+                    }`}>{r.status}</span>
+                    {r.cashbackAmount > 0 && (
+                      <p className="font-mono text-sm font-bold text-green-600 mt-1">+₹{r.cashbackAmount}</p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* Recent Transactions */}
+        {(data?.recentTransactions?.length ?? 0) > 0 && (
+          <section>
+            <div className="flex justify-between items-end mb-4">
+              <h3 className="font-headline font-bold text-xl uppercase tracking-tight text-ink">Recent Transactions</h3>
+              <Link href="/wallet" className="font-mono text-xs uppercase tracking-widest text-amber hover:text-ink snappy">View All →</Link>
+            </div>
+            <div className="space-y-3">
+              {data?.recentTransactions.map((tx) => (
+                <div key={tx._id} className="bg-surface-container-lowest editorial-shadow p-4 rounded-xl flex justify-between items-center">
+                  <div className="min-w-0 flex-1">
+                    <p className="font-body font-bold text-sm text-ink truncate">{tx.description || 'Transaction'}</p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className={`font-mono text-[9px] uppercase tracking-widest px-2 py-0.5 rounded-full font-bold ${
+                        tx.source === 'counter_payment' ? 'bg-indigo-100 text-indigo-700' :
+                        tx.source === 'deal_redemption' ? 'bg-amber/20 text-amber' :
+                        'bg-surface-container-high text-muted'
+                      }`}>
+                        {tx.source === 'counter_payment' ? 'Counter' : tx.source === 'deal_redemption' ? 'Wallet' : tx.source?.replace(/_/g, ' ')}
+                      </span>
+                      <span className="font-mono text-[10px] uppercase tracking-wider text-muted">{formatDate(tx.createdAt)}</span>
+                    </div>
+                  </div>
+                  <span className={`font-mono text-sm font-bold flex-shrink-0 ml-3 ${tx.type === 'credit' ? 'text-green-600' : 'text-terracotta'}`}>
+                    {tx.type === 'credit' ? '+' : '-'}₹{tx.amount?.toFixed(2)}
+                  </span>
                 </div>
               ))}
             </div>

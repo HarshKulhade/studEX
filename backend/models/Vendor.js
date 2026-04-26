@@ -30,6 +30,7 @@ const create = async (data) => {
     otp: null,
     otpExpiry: null,
     vendorCode: data.vendorCode || null,
+    vendorSecretCode: data.vendorSecretCode || null,
     qrCodeUrl: data.qrCodeUrl || null,
     pendingPayable: 0,
     totalSales: 0,

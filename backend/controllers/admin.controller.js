@@ -367,6 +367,9 @@ const adminCreateVendor = async (req, res, next) => {
     // Generate a 6 character uppercase vendor code
     const vendorCode = Math.random().toString(36).substring(2, 8).toUpperCase();
     
+    // Generate a 4 digit secret code
+    const vendorSecretCode = Math.floor(1000 + Math.random() * 9000).toString();
+    
     // Generate simple QR Code encoding the vendor code
     // A production scenario could use a Cloudinary upload, but a public QR chart is very solid
     const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${vendorCode}`;
@@ -378,6 +381,7 @@ const adminCreateVendor = async (req, res, next) => {
       category: category || 'other',
       address: address || '',
       vendorCode,
+      vendorSecretCode,
       qrCodeUrl,
       isApproved: true,
       passwordHash: 'admin-created', // default unloginable
@@ -414,6 +418,53 @@ const adminPayVendor = async (req, res, next) => {
   }
 };
 
+// ─────────────────────────────────────────────────
+//  DELETE /api/admin/vendors/:id
+// ─────────────────────────────────────────────────
+const adminDeleteVendor = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    await db.collection('vendors').doc(id).delete();
+    return ApiResponse.success(res, 200, 'Vendor deleted successfully');
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ─────────────────────────────────────────────────
+//  GET /api/admin/vendors/:id/transactions
+// ─────────────────────────────────────────────────
+const Transaction = require('../models/Transaction');
+
+const getVendorTransactions = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const vendor = await Vendor.findById(id);
+    if (!vendor) return ApiResponse.error(res, 404, 'Vendor not found.');
+
+    const transactions = await Transaction.find({ referenceId: id });
+    
+    // Enrich transactions with student info
+    const enrichedTransactions = await Promise.all(transactions.map(async (tx) => {
+      let studentInfo = { name: 'Unknown', email: 'Unknown' };
+      if (tx.student) {
+        const userDoc = await db.collection('users').doc(tx.student).get();
+        if (userDoc.exists) {
+          studentInfo = { name: userDoc.data().name, email: userDoc.data().email };
+        }
+      }
+      return {
+        ...tx,
+        studentInfo
+      };
+    }));
+
+    return ApiResponse.success(res, 200, 'Transactions fetched', enrichedTransactions);
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = {
   getStats,
   getAllDeals,
@@ -429,4 +480,6 @@ module.exports = {
   getAllVendors,
   adminCreateVendor,
   adminPayVendor,
+  adminDeleteVendor,
+  getVendorTransactions,
 };

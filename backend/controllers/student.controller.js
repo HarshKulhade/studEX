@@ -119,11 +119,28 @@ const getDashboard = async (req, res, next) => {
   try {
     const studentId = req.user._id;
 
-    const [wallet, recentRedemptions, recentPrintJobs] = await Promise.all([
+    const [wallet, recentRedemptions, recentPrintJobs, recentTransactions] = await Promise.all([
       CashbackWallet.findOne({ student: studentId }),
       Redemption.find({ student: studentId }, { limit: 5 }),
       PrintJob.find({ student: studentId }, { limit: 5 }),
+      Transaction.find({ student: studentId }, { limit: 10 }),
     ]);
+
+    // Enrich redemptions with deal details
+    const enrichedRedemptions = await Promise.all(
+      recentRedemptions.map(async (r) => {
+        let dealInfo = { shopName: 'Unknown Deal', offer: '' };
+        if (r.deal) {
+          try {
+            const deal = await Deal.findById(r.deal);
+            if (deal) {
+              dealInfo = { shopName: deal.shopName || deal.title || 'Deal', offer: deal.offer || '' };
+            }
+          } catch (e) { /* ignore */ }
+        }
+        return { ...r, dealInfo };
+      })
+    );
 
     // Count active deals, falling back to all active deals if location is not set
     const activeDeals = await Deal.find({ isActive: true, validUntil: { $gt: new Date() } });
@@ -160,7 +177,8 @@ const getDashboard = async (req, res, next) => {
             totalWithdrawn: wallet.totalWithdrawn,
           }
         : { balance: 0, totalEarned: 0, totalWithdrawn: 0 },
-      recentRedemptions,
+      recentRedemptions: enrichedRedemptions,
+      recentTransactions,
       recentPrintJobs,
       nearbyDealsCount,
       profile: {
