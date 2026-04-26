@@ -58,8 +58,25 @@ const create = async (data) => {
     createdAt: now,
     updatedAt: now,
   };
-  const ref = await col().add(doc);
-  return { _id: ref.id, ...doc };
+
+  // Use the user's name as the document ID
+  // If the name already exists, append a number to avoid overwriting
+  let docId = data.name.trim();
+  let counter = 1;
+  let exists = true;
+
+  while (exists) {
+    const snap = await col().doc(docId).get();
+    if (snap.exists) {
+      docId = `${data.name.trim()} ${counter}`;
+      counter++;
+    } else {
+      exists = false;
+    }
+  }
+
+  await col().doc(docId).set(doc);
+  return { _id: docId, ...doc };
 };
 
 const findById = async (id) => {

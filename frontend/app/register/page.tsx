@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import {
   createUserWithEmailAndPassword,
   sendEmailVerification,
+  deleteUser,
 } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import { authApi } from '@/lib/api';
@@ -32,25 +33,43 @@ export default function RegisterPage() {
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+
+    // Frontend validation
+    if (form.phone && (form.phone.length !== 10 || !/^\d+$/.test(form.phone))) {
+      setError('Phone number must be exactly 10 digits.');
+      return;
+    }
+    if (form.referralCode && form.referralCode.length !== 8) {
+      setError('Referral code must be exactly 8 characters.');
+      return;
+    }
+
     setLoading(true);
     try {
       // 1. Create Firebase account
       const cred = await createUserWithEmailAndPassword(auth, form.email, form.password);
-      // 2. Send verification email (non-blocking — user can verify later)
-      sendEmailVerification(cred.user).catch(() => {});
-      // 3. Get token & register profile in backend
-      const token = await cred.user.getIdToken();
-      await authApi.registerStudent(token, {
-        name: form.name,
-        ...(form.phone ? { phone: form.phone } : {}),
-        college: form.college,
-        ...(form.referralCode ? { referralCode: form.referralCode } : {}),
-      });
-      // 4. Refresh AuthContext so the student profile is loaded before navigation
-      //    This prevents the verify-email page from seeing a null user and redirecting to /login
-      await refreshStudent();
-      // 5. Redirect to email OTP verification
-      router.push('/verify-email');
+
+      try {
+        // 2. Send verification email (non-blocking — user can verify later)
+        sendEmailVerification(cred.user).catch(() => {});
+        // 3. Get token & register profile in backend
+        const token = await cred.user.getIdToken();
+        await authApi.registerStudent(token, {
+          name: form.name,
+          ...(form.phone ? { phone: form.phone } : {}),
+          college: form.college,
+          ...(form.referralCode ? { referralCode: form.referralCode } : {}),
+        });
+        // 4. Refresh AuthContext so the student profile is loaded before navigation
+        //    This prevents the verify-email page from seeing a null user and redirecting to /login
+        await refreshStudent();
+        // 5. Redirect to email OTP verification
+        router.push('/verify-email');
+      } catch (backendError: unknown) {
+        // Rollback: delete orphaned Firebase user if backend profile creation fails
+        await deleteUser(cred.user).catch(() => {});
+        throw backendError;
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Registration failed';
       if (msg.includes('email-already-in-use')) {

@@ -109,9 +109,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (res?.data?.user) {
         setStudent(res.data.user);
       } else {
-        // Backend still returned no user after retry — clear the stale Firebase session
+        // Backend returned no user — wait for manual refreshStudent call during registration
         setStudent(null);
-        await signOut(auth);
         return;
       }
       // Fetch wallet with the fresh token directly
@@ -124,11 +123,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setWalletBalance(parseFloat(walletData.data.balance));
       }
     } catch {
-      // Backend profile fetch failed (e.g., 404 no account) — sign out stale Firebase session
+      // Backend profile fetch failed
       setStudent(null);
       setToken(null);
       tokenRef.current = null;
-      await signOut(auth);
     }
   }, []);
 
