@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { dealApi, redemptionApi, studentApi, walletApi } from '@/lib/api';
 import { useRouter } from 'next/navigation';
+import jsQR from 'jsqr';
 
 /* ═══════════════════════════════════════════════════════════════
    Types
@@ -250,12 +251,13 @@ export default function DealPopup({ dealId, onClose }: DealPopupProps) {
       streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
+        videoRef.current.setAttribute('playsinline', 'true'); // Required for iOS
         videoRef.current.play();
       }
       // Start scanning frames for QR code
       scanIntervalRef.current = setInterval(() => {
         scanFrame();
-      }, 500);
+      }, 400);
     } catch {
       setClaimError('Camera access denied. Please allow camera to scan QR code.');
     }
@@ -273,17 +275,24 @@ export default function DealPopup({ dealId, onClose }: DealPopupProps) {
     canvas.height = video.videoHeight;
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-    // Use BarcodeDetector API if available
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+    // Try jsQR first (works on all platforms including iOS Safari)
+    const code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: 'dontInvert' });
+    if (code && code.data) {
+      handleQRDetected(code.data);
+      return;
+    }
+
+    // Fallback: BarcodeDetector API (Chrome/Android)
     if ('BarcodeDetector' in window) {
       const detector = new (window as any).BarcodeDetector({ formats: ['qr_code'] });
-      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
       detector.detect(imageData).then((barcodes: any[]) => {
         if (barcodes.length > 0) {
           handleQRDetected(barcodes[0].rawValue);
         }
       }).catch(() => { /* silently fail */ });
     }
-    // Fallback: we'll also let users enter code manually
   };
 
   const handleQRDetected = async (qrData: string) => {
