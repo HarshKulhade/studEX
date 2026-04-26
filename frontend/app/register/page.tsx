@@ -8,9 +8,11 @@ import {
 } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import { authApi } from '@/lib/api';
+import { useAuth } from '@/context/AuthContext';
 
 export default function RegisterPage() {
   const router = useRouter();
+  const { refreshStudent } = useAuth();
   const [form, setForm] = useState({
     name: '',
     email: '',
@@ -43,7 +45,10 @@ export default function RegisterPage() {
         college: form.college,
         ...(form.referralCode ? { referralCode: form.referralCode } : {}),
       });
-      // 4. Redirect directly to dashboard
+      // 4. Refresh AuthContext so the student profile is loaded before navigation
+      //    This prevents the dashboard from seeing a null user and redirecting to /login
+      await refreshStudent();
+      // 5. Redirect directly to dashboard
       router.push('/dashboard');
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Registration failed';

@@ -81,15 +81,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []); // no deps — always reads latest token via ref
 
   const fetchStudentProfile = useCallback(async (fbUser: FirebaseUser) => {
+    const attemptLogin = async (t: string): Promise<{ data: { user: StudentProfile } } | null> => {
+      try {
+        const res = await authApi.loginStudent(t) as { data: { user: StudentProfile } };
+        if (res?.data?.user) return res;
+        return null;
+      } catch {
+        return null;
+      }
+    };
+
     try {
       const t = await fbUser.getIdToken();
       setToken(t);
       tokenRef.current = t; // update ref immediately so refreshWallet can use it
-      const res = await authApi.loginStudent(t) as { data: { user: StudentProfile } };
+
+      let res = await attemptLogin(t);
+
+      // If first attempt fails, the user may have just registered and the backend
+      // profile isn't ready yet. Retry once after a short delay.
+      if (!res) {
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+        res = await attemptLogin(t);
+      }
+
       if (res?.data?.user) {
         setStudent(res.data.user);
       } else {
-        // Backend returned no user — clear the stale Firebase session
+        // Backend still returned no user after retry — clear the stale Firebase session
         setStudent(null);
         await signOut(auth);
         return;
