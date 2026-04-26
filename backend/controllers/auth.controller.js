@@ -259,35 +259,61 @@ const loginVendor = async (req, res, next) => {
 };
 
 // ─────────────────────────────────────────────────
-//  PASSWORD RESET (vendor only — students use Firebase)
+//  PASSWORD RESET (students via Firebase Admin + OTP, vendors via bcrypt)
 // ─────────────────────────────────────────────────
 
 const forgotPassword = async (req, res, next) => {
   try {
     const { email, role } = req.body;
 
-    let account;
     if (role === 'vendor') {
-      account = await Vendor.findByEmail(email);
-    } else {
-      // Students use Firebase password reset — just return success
-      return ApiResponse.success(res, 200, 'If an account with this email exists, a reset link has been sent via Firebase.');
-    }
+      const account = await Vendor.findByEmail(email);
+      if (!account) {
+        // Don't reveal whether account exists
+        return ApiResponse.success(res, 200, 'If an account with this email exists, a reset OTP has been sent.');
+      }
 
-    if (!account) {
+      const otp = generateOTP();
+      const otpExpiry = new Date(Date.now() + 10 * 60 * 1000);
+      await Vendor.findByIdAndUpdate(account._id, { otp, otpExpiry });
+      await sendOTPEmail(email, otp, account.ownerName || 'Vendor');
+
       return ApiResponse.success(res, 200, 'If an account with this email exists, a reset OTP has been sent.');
     }
 
-    // Generate OTP
-    const otp = String(Math.floor(100000 + Math.random() * 900000));
+    // ── Student password reset ──
+    const user = await User.findByEmail(email);
+    if (!user) {
+      return ApiResponse.error(res, 404, 'No account found with this email address.');
+    }
+
+    // Rate-limit: don't allow another OTP within 60 seconds
+    if (user.resetOtpSentAt) {
+      const sentAt = user.resetOtpSentAt instanceof Date
+        ? user.resetOtpSentAt
+        : user.resetOtpSentAt.toDate
+          ? user.resetOtpSentAt.toDate()
+          : new Date(user.resetOtpSentAt);
+      const secondsSinceLast = (Date.now() - sentAt.getTime()) / 1000;
+      if (secondsSinceLast < 60) {
+        return ApiResponse.error(res, 429, `Please wait ${Math.ceil(60 - secondsSinceLast)} seconds before requesting a new OTP.`);
+      }
+    }
+
+    const otp = generateOTP();
     const otpExpiry = new Date(Date.now() + 10 * 60 * 1000);
 
-    await Vendor.findByIdAndUpdate(account._id, { otp, otpExpiry });
+    await User.findByIdAndUpdate(user._id, {
+      resetOtp: otp,
+      resetOtpExpiry: otpExpiry,
+      resetOtpSentAt: new Date(),
+    });
 
-    const { sendOTPEmail } = require('../utils/sendEmail');
-    await sendOTPEmail(email, otp, account.ownerName || 'Vendor');
+    await sendOTPEmail(email, otp, user.name || 'Student');
 
-    return ApiResponse.success(res, 200, 'If an account with this email exists, a reset OTP has been sent.');
+    return ApiResponse.success(res, 200, 'If an account with this email exists, a reset OTP has been sent.', {
+      email: email.replace(/(.{2})(.*)(@.*)/, '$1***$3'),
+    });
   } catch (err) {
     next(err);
   }
@@ -297,28 +323,57 @@ const resetPassword = async (req, res, next) => {
   try {
     const { email, otp, newPassword, role } = req.body;
 
-    let account;
     if (role === 'vendor') {
-      account = await Vendor.findByEmail(email);
-    } else {
-      return ApiResponse.error(res, 400, 'Students reset passwords via Firebase. Use the Firebase password reset flow.');
+      const account = await Vendor.findByEmail(email);
+      if (!account) {
+        return ApiResponse.error(res, 404, 'No account found with this email address.');
+      }
+
+      if (!account.otp || account.otp !== otp) {
+        return ApiResponse.error(res, 400, 'Invalid OTP.');
+      }
+
+      const otpExpiry = account.otpExpiry instanceof Date ? account.otpExpiry : account.otpExpiry.toDate();
+      if (new Date() > otpExpiry) {
+        return ApiResponse.error(res, 400, 'OTP has expired. Please request a new one.');
+      }
+
+      const passwordHash = await bcrypt.hash(newPassword, 12);
+      await Vendor.findByIdAndUpdate(account._id, { passwordHash, otp: null, otpExpiry: null });
+
+      return ApiResponse.success(res, 200, 'Password reset successful. Please log in with your new password.');
     }
 
-    if (!account) {
+    // ── Student password reset ──
+    const user = await User.findByEmail(email);
+    if (!user) {
       return ApiResponse.error(res, 404, 'No account found with this email address.');
     }
 
-    if (!account.otp || account.otp !== otp) {
-      return ApiResponse.error(res, 400, 'Invalid OTP.');
+    if (!user.resetOtp || user.resetOtp !== otp.trim()) {
+      return ApiResponse.error(res, 400, 'Invalid OTP. Please check and try again.');
     }
 
-    const otpExpiry = account.otpExpiry instanceof Date ? account.otpExpiry : account.otpExpiry.toDate();
-    if (new Date() > otpExpiry) {
+    // Check expiry
+    const expiry = user.resetOtpExpiry instanceof Date
+      ? user.resetOtpExpiry
+      : user.resetOtpExpiry.toDate
+        ? user.resetOtpExpiry.toDate()
+        : new Date(user.resetOtpExpiry);
+
+    if (new Date() > expiry) {
       return ApiResponse.error(res, 400, 'OTP has expired. Please request a new one.');
     }
 
-    const passwordHash = await bcrypt.hash(newPassword, 12);
-    await Vendor.findByIdAndUpdate(account._id, { passwordHash, otp: null, otpExpiry: null });
+    // Update password in Firebase Auth
+    await admin.auth().updateUser(user.firebaseUid, { password: newPassword });
+
+    // Clear OTP fields
+    await User.findByIdAndUpdate(user._id, {
+      resetOtp: null,
+      resetOtpExpiry: null,
+      resetOtpSentAt: null,
+    });
 
     return ApiResponse.success(res, 200, 'Password reset successful. Please log in with your new password.');
   } catch (err) {
@@ -452,6 +507,40 @@ const verifyEmailOTP = async (req, res, next) => {
   }
 };
 
+/**
+ * POST /api/auth/verify-reset-otp
+ * Verify the reset OTP is correct without actually resetting the password.
+ */
+const verifyResetOTP = async (req, res, next) => {
+  try {
+    const { email, otp } = req.body;
+
+    const user = await User.findByEmail(email);
+    if (!user) {
+      return ApiResponse.error(res, 404, 'No account found with this email address.');
+    }
+
+    if (!user.resetOtp || user.resetOtp !== otp.trim()) {
+      return ApiResponse.error(res, 400, 'Invalid OTP. Please check and try again.');
+    }
+
+    // Check expiry
+    const expiry = user.resetOtpExpiry instanceof Date
+      ? user.resetOtpExpiry
+      : user.resetOtpExpiry.toDate
+        ? user.resetOtpExpiry.toDate()
+        : new Date(user.resetOtpExpiry);
+
+    if (new Date() > expiry) {
+      return ApiResponse.error(res, 400, 'OTP has expired. Please request a new one.');
+    }
+
+    return ApiResponse.success(res, 200, 'OTP verified successfully.');
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = {
   registerStudent,
   loginStudent,
@@ -459,6 +548,7 @@ module.exports = {
   loginVendor,
   forgotPassword,
   resetPassword,
+  verifyResetOTP,
   sendEmailOTP,
   verifyEmailOTP,
 };

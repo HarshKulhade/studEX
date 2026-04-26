@@ -35,7 +35,7 @@ const getTransporter = () => {
 const sendEmail = async ({ to, subject, html, text }) => {
   const t = getTransporter();
   await t.sendMail({
-    from: `"Student Super App" <${process.env.EMAIL_FROM || process.env.EMAIL_USER}>`,
+    from: `"StudEX" <${process.env.EMAIL_FROM || process.env.EMAIL_USER}>`,
     to,
     subject,
     html,
@@ -51,48 +51,73 @@ const sendEmail = async ({ to, subject, html, text }) => {
  * @param {string} name   - recipient's first name (for personalisation)
  */
 const sendOTPEmail = async (to, otp, name = 'Student') => {
+  const otpDigits = otp.split('').map(d => `
+    <td style="width:48px;height:56px;text-align:center;vertical-align:middle;background:#F7F4EF;border:2px solid #D4A017;border-radius:8px;font-family:'Courier New',Courier,monospace;font-size:28px;font-weight:700;color:#1C1917;letter-spacing:0;">${d}</td>
+  `).join('<td style="width:8px;"></td>');
+
   const html = `
   <!DOCTYPE html>
   <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Email Verification — Student Super App</title>
+    <title>Verify Your Email — StudEX</title>
   </head>
-  <body style="margin:0;padding:0;background:#f4f4f4;font-family:Arial,sans-serif;">
-    <table width="100%" cellpadding="0" cellspacing="0">
+  <body style="margin:0;padding:0;background:#E8E4DF;font-family:Georgia,'Times New Roman',Times,serif;">
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#E8E4DF;">
       <tr>
-        <td align="center" style="padding:40px 0;">
-          <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.08);">
+        <td align="center" style="padding:40px 16px;">
+          <table width="600" cellpadding="0" cellspacing="0" style="background:#F7F4EF;overflow:hidden;box-shadow:0 2px 24px rgba(28,25,23,0.12);">
             <!-- Header -->
             <tr>
-              <td style="background:linear-gradient(135deg,#6c63ff,#4fc3f7);padding:30px;text-align:center;">
-                <h1 style="color:#ffffff;margin:0;font-size:24px;font-weight:700;">🎓 Student Super App</h1>
-                <p style="color:rgba(255,255,255,0.85);margin:8px 0 0;font-size:14px;">Your Campus. Your Perks. Amplified.</p>
+              <td style="background:#1C1917;padding:32px 40px;text-align:center;">
+                <h1 style="color:#D4A017;margin:0;font-family:'Courier New',Courier,monospace;font-size:32px;font-weight:900;letter-spacing:6px;text-transform:uppercase;">STUDEX</h1>
+                <p style="color:rgba(255,255,255,0.5);margin:10px 0 0;font-family:'Courier New',Courier,monospace;font-size:10px;letter-spacing:3px;text-transform:uppercase;">The Student Exchange</p>
+              </td>
+            </tr>
+            <!-- Divider line -->
+            <tr>
+              <td style="padding:0 40px;">
+                <div style="border-top:3px solid #1C1917;border-bottom:1px solid #1C1917;height:4px;margin:0;"></div>
               </td>
             </tr>
             <!-- Body -->
             <tr>
-              <td style="padding:40px 32px;">
-                <h2 style="color:#1a1a2e;margin:0 0 16px;font-size:20px;">Hi ${name} 👋</h2>
-                <p style="color:#555;margin:0 0 24px;line-height:1.6;">
-                  Use the one-time password (OTP) below to verify your email address.
-                  This code expires in <strong>10 minutes</strong>.
+              <td style="padding:40px 40px 16px;">
+                <p style="font-family:'Courier New',Courier,monospace;font-size:10px;letter-spacing:3px;text-transform:uppercase;color:#78716C;margin:0 0 8px;">Email Verification</p>
+                <h2 style="color:#1C1917;margin:0 0 20px;font-family:Georgia,'Times New Roman',serif;font-size:26px;font-weight:700;line-height:1.3;">Hi ${name},</h2>
+                <p style="color:#44403C;margin:0 0 32px;line-height:1.7;font-size:15px;">
+                  Use the one-time verification code below to confirm your email address and activate your StudEX account. This code is valid for <strong style="color:#1C1917;">10 minutes</strong>.
                 </p>
-                <!-- OTP box -->
-                <div style="background:#f8f6ff;border:2px dashed #6c63ff;border-radius:10px;padding:24px;text-align:center;margin:0 0 24px;">
-                  <p style="margin:0 0 8px;color:#6c63ff;font-size:13px;font-weight:600;letter-spacing:1px;text-transform:uppercase;">Your OTP</p>
-                  <span style="font-size:42px;font-weight:700;letter-spacing:10px;color:#1a1a2e;">${otp}</span>
+              </td>
+            </tr>
+            <!-- OTP Box -->
+            <tr>
+              <td style="padding:0 40px 32px;">
+                <div style="background:#1C1917;border-radius:12px;padding:32px 24px;text-align:center;">
+                  <p style="margin:0 0 16px;font-family:'Courier New',Courier,monospace;font-size:10px;letter-spacing:4px;text-transform:uppercase;color:#D4A017;font-weight:700;">Your Verification Code</p>
+                  <table cellpadding="0" cellspacing="0" style="margin:0 auto;">
+                    <tr>${otpDigits}</tr>
+                  </table>
+                  <p style="margin:16px 0 0;font-family:'Courier New',Courier,monospace;font-size:10px;letter-spacing:2px;text-transform:uppercase;color:rgba(255,255,255,0.35);">Expires in 10 minutes</p>
                 </div>
-                <p style="color:#888;font-size:13px;margin:0;">
-                  If you did not request this, please ignore this email. Your account remains secure.
-                </p>
+              </td>
+            </tr>
+            <!-- Security note -->
+            <tr>
+              <td style="padding:0 40px 40px;">
+                <div style="border-top:1px solid #D6D3CF;padding-top:20px;">
+                  <p style="color:#78716C;font-size:13px;margin:0;line-height:1.6;">
+                    If you didn't create a StudEX account, you can safely ignore this email. Your information remains secure.
+                  </p>
+                </div>
               </td>
             </tr>
             <!-- Footer -->
             <tr>
-              <td style="background:#f8f8f8;padding:20px 32px;text-align:center;border-top:1px solid #eee;">
-                <p style="margin:0;color:#aaa;font-size:12px;">© ${new Date().getFullYear()} Student Super App. All rights reserved.</p>
+              <td style="background:#1C1917;padding:24px 40px;text-align:center;">
+                <p style="margin:0 0 4px;font-family:'Courier New',Courier,monospace;font-size:10px;letter-spacing:3px;text-transform:uppercase;color:#D4A017;font-weight:700;">STUDEX</p>
+                <p style="margin:0;font-family:'Courier New',Courier,monospace;font-size:10px;letter-spacing:2px;text-transform:uppercase;color:rgba(255,255,255,0.3);">© ${new Date().getFullYear()} StudEX · All rights reserved</p>
               </td>
             </tr>
           </table>
@@ -105,9 +130,9 @@ const sendOTPEmail = async (to, otp, name = 'Student') => {
 
   await sendEmail({
     to,
-    subject: `${otp} is your Student Super App verification code`,
+    subject: `${otp} — Your StudEX verification code`,
     html,
-    text: `Your OTP is: ${otp}. It expires in 10 minutes.`,
+    text: `Hi ${name}, your StudEX verification code is: ${otp}. It expires in 10 minutes.`,
   });
 };
 

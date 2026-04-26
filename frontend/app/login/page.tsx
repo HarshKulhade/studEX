@@ -2,10 +2,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import {
-  signInWithEmailAndPassword,
-  sendPasswordResetEmail,
-} from 'firebase/auth';
+import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import { authApi } from '@/lib/api';
 
@@ -15,7 +12,6 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [resetSent, setResetSent] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -42,16 +38,6 @@ export default function LoginPage() {
       }
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleForgotPassword = async () => {
-    if (!email) { setError('Enter your email first.'); return; }
-    try {
-      await sendPasswordResetEmail(auth, email);
-      setResetSent(true);
-    } catch {
-      setError('Could not send reset email.');
     }
   };
 
@@ -85,11 +71,7 @@ export default function LoginPage() {
               {error}
             </div>
           )}
-          {resetSent && (
-            <div className="mb-6 p-4 bg-surface-container-high text-ink rounded-lg font-body text-sm">
-              Password reset email sent! Check your inbox.
-            </div>
-          )}
+
 
           {/* Form */}
           <form className="space-y-8" onSubmit={handleLogin}>
@@ -114,13 +96,12 @@ export default function LoginPage() {
                   <label className="font-mono text-xs uppercase tracking-widest text-on-surface-variant" htmlFor="password">
                     Password
                   </label>
-                  <button
-                    type="button"
-                    onClick={handleForgotPassword}
+                  <Link
+                    href="/forgot-password"
                     className="text-xs text-secondary hover:text-primary snappy underline"
                   >
                     Forgot Password?
-                  </button>
+                  </Link>
                 </div>
                 <div className="relative">
                   <input

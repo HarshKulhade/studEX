@@ -11,6 +11,7 @@ const {
   loginVendor,
   forgotPassword,
   resetPassword,
+  verifyResetOTP,
   sendEmailOTP,
   verifyEmailOTP,
 } = require('../controllers/auth.controller');
@@ -75,9 +76,7 @@ const resetPasswordValidator = [
     .isLength({ min: 6, max: 6 }).withMessage('OTP must be 6 digits')
     .isNumeric().withMessage('OTP must be numeric'),
   body('newPassword')
-    .isLength({ min: 8 }).withMessage('New password must be at least 8 characters')
-    .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/)
-    .withMessage('Password must contain uppercase, lowercase, and a digit'),
+    .isLength({ min: 6 }).withMessage('New password must be at least 6 characters'),
   body('role').optional().isIn(['student', 'vendor']),
 ];
 
@@ -111,8 +110,21 @@ router.post(
   verifyEmailOTP
 );
 
-// Password reset (vendor only; students use Firebase password reset)
+// Password reset (students + vendors)
 router.post('/forgot-password', otpLimiter, forgotPasswordValidator, validate, forgotPassword);
+router.post(
+  '/verify-reset-otp',
+  otpLimiter,
+  [
+    body('email').isEmail().withMessage('Valid email is required').normalizeEmail(),
+    body('otp')
+      .notEmpty().withMessage('OTP is required')
+      .isLength({ min: 6, max: 6 }).withMessage('OTP must be 6 digits')
+      .isNumeric().withMessage('OTP must be numeric'),
+  ],
+  validate,
+  verifyResetOTP
+);
 router.post('/reset-password', authLimiter, resetPasswordValidator, validate, resetPassword);
 
 module.exports = router;
