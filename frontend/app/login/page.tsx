@@ -16,6 +16,7 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [resetSent, setResetSent] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -25,8 +26,13 @@ export default function LoginPage() {
       const cred = await signInWithEmailAndPassword(auth, email, password);
       const token = await cred.user.getIdToken();
       // Sync with backend
-      await authApi.loginStudent(token);
-      router.push('/dashboard');
+      const loginRes = await authApi.loginStudent(token) as { data: { user: { emailVerified?: boolean } } };
+      // Redirect based on email verification status
+      if (loginRes?.data?.user?.emailVerified) {
+        router.push('/dashboard');
+      } else {
+        router.push('/verify-email');
+      }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to sign in';
       if (message.includes('user-not-found') || message.includes('wrong-password') || message.includes('invalid-credential')) {
@@ -116,15 +122,27 @@ export default function LoginPage() {
                     Forgot Password?
                   </button>
                 </div>
-                <input
-                  id="password"
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  placeholder="••••••••"
-                  className="input-underline bg-surface-container-high"
-                />
+                <div className="relative">
+                  <input
+                    id="password"
+                    type={showPassword ? 'text' : 'password'}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    placeholder="••••••••"
+                    className="input-underline bg-surface-container-high pr-10"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((v) => !v)}
+                    className="absolute right-0 top-1/2 -translate-y-1/2 p-2 text-muted hover:text-ink snappy"
+                    tabIndex={-1}
+                  >
+                    <span className="material-symbols-outlined text-xl">
+                      {showPassword ? 'visibility_off' : 'visibility'}
+                    </span>
+                  </button>
+                </div>
               </div>
             </div>
 

@@ -11,6 +11,8 @@ const {
   loginVendor,
   forgotPassword,
   resetPassword,
+  sendEmailOTP,
+  verifyEmailOTP,
 } = require('../controllers/auth.controller');
 const validate = require('../middleware/validate');
 const { authLimiter, otpLimiter } = require('../middleware/rateLimiter');
@@ -93,6 +95,21 @@ router.post('/login', authLimiter, loginStudent);
 // Vendor auth (JWT-based)
 router.post('/vendor/register', authLimiter, vendorRegisterValidator, validate, registerVendor);
 router.post('/vendor/login', authLimiter, loginVendorValidator, validate, loginVendor);
+
+// Student email OTP verification
+router.post('/send-otp', otpLimiter, sendEmailOTP);
+router.post(
+  '/verify-otp',
+  otpLimiter,
+  [
+    body('otp')
+      .notEmpty().withMessage('OTP is required')
+      .isLength({ min: 6, max: 6 }).withMessage('OTP must be 6 digits')
+      .isNumeric().withMessage('OTP must be numeric'),
+  ],
+  validate,
+  verifyEmailOTP
+);
 
 // Password reset (vendor only; students use Firebase password reset)
 router.post('/forgot-password', otpLimiter, forgotPasswordValidator, validate, forgotPassword);

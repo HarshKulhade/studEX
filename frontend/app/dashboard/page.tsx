@@ -87,7 +87,9 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (!loading && !firebaseUser) router.push('/login');
-  }, [firebaseUser, loading, router]);
+    // Redirect to email verification if not verified
+    if (!loading && student && !student.emailVerified) router.push('/verify-email');
+  }, [firebaseUser, student, loading, router]);
 
   useEffect(() => {
     if (token) loadDashboard();

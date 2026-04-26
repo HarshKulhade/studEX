@@ -8,7 +8,7 @@ const CashbackWallet = require('../models/CashbackWallet');
 const Transaction = require('../models/Transaction');
 const ApiResponse = require('../utils/ApiResponse');
 const { generateVendorToken } = require('../utils/generateToken');
-const { sendVendorRegistrationAlert } = require('../utils/sendEmail');
+const { sendVendorRegistrationAlert, sendOTPEmail, generateOTP } = require('../utils/sendEmail');
 
 // ── Helpers ────────────────────────────────────────
 
@@ -88,6 +88,7 @@ const registerStudent = async (req, res, next) => {
       college,
       referredBy: referrer ? referrer._id : null,
       isVerified: decodedToken.email_verified || false,
+      emailVerified: false,
     });
 
     return ApiResponse.success(res, 201, 'Registration successful.', {
@@ -130,6 +131,13 @@ const loginStudent = async (req, res, next) => {
       user.isVerified = true;
     }
 
+    // Auto-migrate existing users: if emailVerified field doesn't exist yet,
+    // treat them as verified so they aren't locked out after this feature is added
+    if (user.emailVerified === undefined || user.emailVerified === null) {
+      await User.findByIdAndUpdate(user._id, { emailVerified: true });
+      user.emailVerified = true;
+    }
+
     return ApiResponse.success(res, 200, 'Login successful', {
       user: {
         _id: user._id,
@@ -138,6 +146,7 @@ const loginStudent = async (req, res, next) => {
         college: user.college,
         phone: user.phone,
         isVerified: user.isVerified,
+        emailVerified: user.emailVerified || false,
         verificationStatus: user.verificationStatus,
         referralCode: user.referralCode,
         ambassadorTier: user.ambassadorTier,
@@ -317,6 +326,132 @@ const resetPassword = async (req, res, next) => {
   }
 };
 
+// ─────────────────────────────────────────────────
+//  STUDENT EMAIL OTP VERIFICATION
+// ─────────────────────────────────────────────────
+
+/**
+ * POST /api/auth/send-otp
+ * Send a 6-digit OTP to the authenticated student's email.
+ */
+const sendEmailOTP = async (req, res, next) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return ApiResponse.error(res, 401, 'No Firebase token provided.');
+    }
+    const token = authHeader.split(' ')[1];
+
+    let decodedToken;
+    try {
+      decodedToken = await admin.auth().verifyIdToken(token);
+    } catch (err) {
+      return ApiResponse.error(res, 401, 'Invalid Firebase token.');
+    }
+
+    const user = await User.findByFirebaseUid(decodedToken.uid);
+    if (!user) {
+      return ApiResponse.error(res, 404, 'No account found. Please register first.');
+    }
+
+    if (user.emailVerified) {
+      return ApiResponse.success(res, 200, 'Email already verified.');
+    }
+
+    // Rate-limit: don't allow sending another OTP within 60 seconds
+    if (user.emailOtpSentAt) {
+      const sentAt = user.emailOtpSentAt instanceof Date
+        ? user.emailOtpSentAt
+        : user.emailOtpSentAt.toDate
+          ? user.emailOtpSentAt.toDate()
+          : new Date(user.emailOtpSentAt);
+      const secondsSinceLast = (Date.now() - sentAt.getTime()) / 1000;
+      if (secondsSinceLast < 60) {
+        return ApiResponse.error(res, 429, `Please wait ${Math.ceil(60 - secondsSinceLast)} seconds before requesting a new OTP.`);
+      }
+    }
+
+    const otp = generateOTP();
+    const otpExpiry = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+    await User.findByIdAndUpdate(user._id, {
+      emailOtp: otp,
+      emailOtpExpiry: otpExpiry,
+      emailOtpSentAt: new Date(),
+    });
+
+    await sendOTPEmail(user.email, otp, user.name || 'Student');
+
+    return ApiResponse.success(res, 200, 'OTP sent to your email address.', {
+      email: user.email.replace(/(.{2})(.*)(@.*)/, '$1***$3'), // mask email
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * POST /api/auth/verify-otp
+ * Verify the 6-digit OTP and mark email as verified.
+ */
+const verifyEmailOTP = async (req, res, next) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return ApiResponse.error(res, 401, 'No Firebase token provided.');
+    }
+    const token = authHeader.split(' ')[1];
+
+    let decodedToken;
+    try {
+      decodedToken = await admin.auth().verifyIdToken(token);
+    } catch (err) {
+      return ApiResponse.error(res, 401, 'Invalid Firebase token.');
+    }
+
+    const { otp } = req.body;
+    if (!otp) {
+      return ApiResponse.error(res, 400, 'OTP is required.');
+    }
+
+    const user = await User.findByFirebaseUid(decodedToken.uid);
+    if (!user) {
+      return ApiResponse.error(res, 404, 'No account found.');
+    }
+
+    if (user.emailVerified) {
+      return ApiResponse.success(res, 200, 'Email already verified.');
+    }
+
+    if (!user.emailOtp || user.emailOtp !== otp.trim()) {
+      return ApiResponse.error(res, 400, 'Invalid OTP. Please check and try again.');
+    }
+
+    // Check expiry
+    const expiry = user.emailOtpExpiry instanceof Date
+      ? user.emailOtpExpiry
+      : user.emailOtpExpiry.toDate
+        ? user.emailOtpExpiry.toDate()
+        : new Date(user.emailOtpExpiry);
+
+    if (new Date() > expiry) {
+      return ApiResponse.error(res, 400, 'OTP has expired. Please request a new one.');
+    }
+
+    // Mark email as verified and clear OTP fields
+    await User.findByIdAndUpdate(user._id, {
+      emailVerified: true,
+      emailOtp: null,
+      emailOtpExpiry: null,
+      emailOtpSentAt: null,
+    });
+
+    return ApiResponse.success(res, 200, 'Email verified successfully!');
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = {
   registerStudent,
   loginStudent,
@@ -324,4 +459,6 @@ module.exports = {
   loginVendor,
   forgotPassword,
   resetPassword,
+  sendEmailOTP,
+  verifyEmailOTP,
 };

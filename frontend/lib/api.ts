@@ -41,6 +41,12 @@ export const authApi = {
 
   loginStudent: (token: string) =>
     apiFetch('/api/auth/login', { method: 'POST', body: JSON.stringify({}) }, token),
+
+  sendOTP: (token: string) =>
+    apiFetch('/api/auth/send-otp', { method: 'POST', body: JSON.stringify({}) }, token),
+
+  verifyOTP: (token: string, otp: string) =>
+    apiFetch('/api/auth/verify-otp', { method: 'POST', body: JSON.stringify({ otp }) }, token),
 };
 
 // ── Student ───────────────────────────────────────────────────────────────

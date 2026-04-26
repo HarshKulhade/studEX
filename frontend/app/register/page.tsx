@@ -24,6 +24,7 @@ export default function RegisterPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const update = (field: string, value: string) =>
     setForm((f) => ({ ...f, [field]: value }));
@@ -46,10 +47,10 @@ export default function RegisterPage() {
         ...(form.referralCode ? { referralCode: form.referralCode } : {}),
       });
       // 4. Refresh AuthContext so the student profile is loaded before navigation
-      //    This prevents the dashboard from seeing a null user and redirecting to /login
+      //    This prevents the verify-email page from seeing a null user and redirecting to /login
       await refreshStudent();
-      // 5. Redirect directly to dashboard
-      router.push('/dashboard');
+      // 5. Redirect to email OTP verification
+      router.push('/verify-email');
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Registration failed';
       if (msg.includes('email-already-in-use')) {
@@ -136,15 +137,27 @@ export default function RegisterPage() {
               <label className="block font-mono text-[10px] uppercase tracking-[0.2em] text-outline mb-1">
                 Password
               </label>
-              <input
-                type="password"
-                required
-                minLength={6}
-                placeholder="Minimum 6 characters"
-                value={form.password}
-                onChange={(e) => update('password', e.target.value)}
-                className="input-underline"
-              />
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  required
+                  minLength={6}
+                  placeholder="Minimum 6 characters"
+                  value={form.password}
+                  onChange={(e) => update('password', e.target.value)}
+                  className="input-underline pr-10"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((v) => !v)}
+                  className="absolute right-0 top-1/2 -translate-y-1/2 p-2 text-muted hover:text-ink snappy"
+                  tabIndex={-1}
+                >
+                  <span className="material-symbols-outlined text-xl">
+                    {showPassword ? 'visibility_off' : 'visibility'}
+                  </span>
+                </button>
+              </div>
             </div>
 
             {/* Phone */}

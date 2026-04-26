@@ -17,6 +17,7 @@ interface StudentProfile {
   phone?: string;
   college?: string;
   isVerified: boolean;
+  emailVerified: boolean;
   verificationStatus: string;
   referralCode: string;
   ambassadorTier: string;
