@@ -26,6 +26,7 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [isOtherCollege, setIsOtherCollege] = useState(false);
 
   const update = (field: string, value: string) =>
     setForm((f) => ({ ...f, [field]: value }));
@@ -198,14 +199,44 @@ export default function RegisterPage() {
               <label className="block font-mono text-[10px] uppercase tracking-[0.2em] text-outline mb-1">
                 Institution / College
               </label>
-              <input
-                type="text"
-                required
-                placeholder="Your College Name"
-                value={form.college}
-                onChange={(e) => update('college', e.target.value)}
-                className="input-underline"
-              />
+              <div className="relative">
+                <select
+                  required
+                  value={isOtherCollege ? 'Other' : form.college}
+                  onChange={(e) => {
+                    if (e.target.value === 'Other') {
+                      setIsOtherCollege(true);
+                      update('college', '');
+                    } else {
+                      setIsOtherCollege(false);
+                      update('college', e.target.value);
+                    }
+                  }}
+                  className="input-underline w-full bg-transparent appearance-none pr-10"
+                >
+                  <option value="" disabled>Select your college</option>
+                  <option value="Lakshmi Narain College of Technology, Bhopal">Lakshmi Narain College of Technology, Bhopal</option>
+                  <option value="Lakshmi Narain College of Technology & Science, Bhopal">Lakshmi Narain College of Technology & Science, Bhopal</option>
+                  <option value="Lakshmi Narain College of Technology & Excellence, Bhopal">Lakshmi Narain College of Technology & Excellence, Bhopal</option>
+                  <option value="Other">Other (Please specify)</option>
+                </select>
+                <div className="absolute right-0 top-1/2 -translate-y-1/2 pointer-events-none p-2 text-muted">
+                  <span className="material-symbols-outlined text-xl">expand_more</span>
+                </div>
+              </div>
+
+              {isOtherCollege && (
+                <div className="relative mt-4">
+                  <input
+                    type="text"
+                    required
+                    placeholder="Enter your college name"
+                    value={form.college}
+                    onChange={(e) => update('college', e.target.value)}
+                    className="input-underline w-full"
+                  />
+                </div>
+              )}
             </div>
 
             {/* Referral Code */}
