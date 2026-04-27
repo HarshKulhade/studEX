@@ -6,10 +6,15 @@ const ApiResponse = require('../utils/ApiResponse');
 const Razorpay = require('razorpay');
 const crypto = require('crypto');
 
-const razorpay = new Razorpay({
-  key_id: process.env.RAZORPAY_KEY_ID,
-  key_secret: process.env.RAZORPAY_KEY_SECRET,
-});
+let razorpay;
+if (process.env.RAZORPAY_KEY_ID && process.env.RAZORPAY_KEY_SECRET) {
+  razorpay = new Razorpay({
+    key_id: process.env.RAZORPAY_KEY_ID,
+    key_secret: process.env.RAZORPAY_KEY_SECRET,
+  });
+} else {
+  console.warn('[WARNING] Razorpay keys (RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET) are missing. Razorpay features will be disabled.');
+}
 
 // ─────────────────────────────────────────────────
 //  GET /api/wallet
@@ -157,6 +162,10 @@ const setUpiId = async (req, res, next) => {
 // ─────────────────────────────────────────────────
 const createRazorpayOrder = async (req, res, next) => {
   try {
+    if (!razorpay) {
+      return ApiResponse.error(res, 503, 'Payment gateway is currently unavailable.');
+    }
+
     const { amount } = req.body;
     if (!amount || amount < 10) {
       return ApiResponse.error(res, 400, 'Minimum top-up amount is ₹10.');
