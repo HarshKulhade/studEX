@@ -249,10 +249,10 @@ const adminDeleteOpportunity = async (req, res, next) => {
 const adminVerifyUser = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { action } = req.body; // 'verify' or 'reject'
+    const { action } = req.body; // 'verify', 'reject', or 'unverify'
 
-    if (!['verify', 'reject'].includes(action)) {
-      return ApiResponse.error(res, 400, 'Action must be "verify" or "reject".');
+    if (!['verify', 'reject', 'unverify'].includes(action)) {
+      return ApiResponse.error(res, 400, 'Action must be "verify", "reject", or "unverify".');
     }
 
     const userRef = db.collection('users').doc(id);
@@ -262,7 +262,7 @@ const adminVerifyUser = async (req, res, next) => {
     }
 
     const updates = {
-      verificationStatus: action === 'verify' ? 'verified' : 'rejected',
+      verificationStatus: action === 'verify' ? 'verified' : (action === 'reject' ? 'rejected' : 'unverified'),
       isVerified: action === 'verify',
       updatedAt: new Date(),
     };

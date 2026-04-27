@@ -765,24 +765,60 @@ export default function AdminPage() {
                       </div>
                     )}
                     {u.verificationStatus === 'verified' && (
-                      <span className="material-symbols-outlined text-green-400 text-xl flex-shrink-0">verified</span>
+                      <div className="flex items-center gap-3 flex-shrink-0">
+                        <span className="material-symbols-outlined text-green-400 text-xl">verified</span>
+                        <button
+                          disabled={verifyingUser === u._id}
+                          onClick={async () => {
+                            if (!confirm('Are you sure you want to revoke verification and make this user unverified?')) return;
+                            setVerifyingUser(u._id);
+                            try {
+                              await apiFetch(`/users/${u._id}/verify`, { method: 'PUT', body: JSON.stringify({ action: 'unverify' }) });
+                              setMsg('⚠️ User made unverified.');
+                              await load();
+                            } catch (err: any) { setMsg(`❌ ${err.message}`); }
+                            finally { setVerifyingUser(null); }
+                          }}
+                          className="bg-white/10 hover:bg-white/20 text-white/70 px-3 py-1.5 rounded-lg text-xs font-bold"
+                        >
+                          Revoke
+                        </button>
+                      </div>
                     )}
                     {u.verificationStatus === 'rejected' && (
-                      <button
-                        disabled={verifyingUser === u._id}
-                        onClick={async () => {
-                          setVerifyingUser(u._id);
-                          try {
-                            await apiFetch(`/users/${u._id}/verify`, { method: 'PUT', body: JSON.stringify({ action: 'verify' }) });
-                            setMsg('✅ User verified!');
-                            await load();
-                          } catch (err: any) { setMsg(`❌ ${err.message}`); }
-                          finally { setVerifyingUser(null); }
-                        }}
-                        className="bg-green-900/40 hover:bg-green-900/60 text-green-400 px-3 py-1.5 rounded-lg text-xs font-bold flex-shrink-0"
-                      >
-                        Re-verify
-                      </button>
+                      <div className="flex gap-2 flex-shrink-0">
+                        <button
+                          disabled={verifyingUser === u._id}
+                          onClick={async () => {
+                            setVerifyingUser(u._id);
+                            try {
+                              await apiFetch(`/users/${u._id}/verify`, { method: 'PUT', body: JSON.stringify({ action: 'verify' }) });
+                              setMsg('✅ User verified!');
+                              await load();
+                            } catch (err: any) { setMsg(`❌ ${err.message}`); }
+                            finally { setVerifyingUser(null); }
+                          }}
+                          className="bg-green-900/40 hover:bg-green-900/60 text-green-400 px-3 py-1.5 rounded-lg text-xs font-bold flex-shrink-0"
+                        >
+                          Re-verify
+                        </button>
+                        <button
+                          disabled={verifyingUser === u._id}
+                          onClick={async () => {
+                            if (!confirm('Make this user unverified so they can restart the process?')) return;
+                            setVerifyingUser(u._id);
+                            try {
+                              await apiFetch(`/users/${u._id}/verify`, { method: 'PUT', body: JSON.stringify({ action: 'unverify' }) });
+                              setMsg('⚠️ User reset to unverified.');
+                              await load();
+                            } catch (err: any) { setMsg(`❌ ${err.message}`); }
+                            finally { setVerifyingUser(null); }
+                          }}
+                          className="bg-white/10 hover:bg-white/20 text-white/70 px-3 py-1.5 rounded-lg text-xs font-bold flex-shrink-0"
+                        >
+                          Reset
+                        </button>
+                      </div>
                     )}
                   </div>
 
