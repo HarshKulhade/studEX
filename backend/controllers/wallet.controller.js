@@ -220,6 +220,7 @@ const createCashfreeOrder = async (req, res, next) => {
         payment_session_id: response.data.payment_session_id,
         order_amount: response.data.order_amount,
         order_currency: response.data.order_currency,
+        payment_mode: process.env.CASHFREE_ENV === 'PRODUCTION' ? 'production' : 'sandbox',
       },
     });
   } catch (err) {

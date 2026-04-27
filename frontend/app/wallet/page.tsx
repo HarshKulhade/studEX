@@ -112,12 +112,12 @@ export default function WalletPage() {
       await loadCashfreeScript();
 
       // 1. Create order on backend
-      const res = await walletApi.createCashfreeOrder(token, { amount: parseFloat(topupAmount) }) as { data: { order: { order_id: string; payment_session_id: string } } };
+      const res = await walletApi.createCashfreeOrder(token, { amount: parseFloat(topupAmount) }) as { data: { order: { order_id: string; payment_session_id: string; payment_mode: string } } };
       const order = res.data.order;
 
-      // 2. Initialize Cashfree checkout
+      // 2. Initialize Cashfree checkout (mode comes from backend to avoid env mismatch)
       const cashfree = await (window as any).Cashfree({
-        mode: process.env.NEXT_PUBLIC_CASHFREE_ENV === 'PRODUCTION' ? 'production' : 'sandbox',
+        mode: order.payment_mode || 'production',
       });
 
       const checkoutOptions = {
