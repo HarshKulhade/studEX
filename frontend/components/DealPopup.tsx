@@ -881,20 +881,24 @@ export default function DealPopup({ dealId, onClose }: DealPopupProps) {
                                 <p className="font-mono text-[10px] uppercase tracking-wider text-amber">Wallet Balance</p>
                                 <p className="font-mono text-2xl font-bold">₹{walletBalance.toFixed(2)}</p>
                               </div>
-                              <span className="material-symbols-outlined text-terracotta text-2xl">construction</span>
+                              <span className="material-symbols-outlined text-amber text-2xl">account_balance_wallet</span>
                             </div>
                           </div>
                           
-                          <div className="p-3 bg-amber/10 text-amber-800 rounded-sm text-xs font-body mb-3 border border-amber/20">
-                            <span className="font-bold">Notice:</span> Wallet topup functionality is currently in development. Please use the Pay at Counter button.
-                          </div>
+                          {walletBalance < discountCalc.finalAmount && (
+                            <div className="p-3 bg-amber/10 text-amber-800 rounded-sm text-xs font-body mb-3 border border-amber/20 flex items-center justify-between">
+                              <span>Insufficient balance</span>
+                              <button onClick={() => router.push('/wallet')} className="font-bold text-amber underline">Add Funds →</button>
+                            </div>
+                          )}
                           
                           <button
-                            disabled={true}
-                            className="w-full bg-surface-container-high text-muted py-4 rounded-full font-headline font-bold text-sm tracking-[0.2em] uppercase cursor-not-allowed flex items-center justify-center gap-3"
+                            onClick={handleWalletPay}
+                            disabled={payingWithWallet || walletBalance < discountCalc.finalAmount}
+                            className="w-full bg-ink text-white py-4 rounded-full font-headline font-bold text-sm tracking-[0.2em] uppercase active:scale-[0.98] snappy flex items-center justify-center gap-3 disabled:opacity-40"
                           >
                             <span className="material-symbols-outlined text-lg">payments</span>
-                            Pay from Wallet
+                            {payingWithWallet ? 'Processing…' : `Pay ₹${discountCalc.finalAmount.toFixed(2)} from Wallet`}
                           </button>
                         </div>
                         
