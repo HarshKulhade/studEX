@@ -1,6 +1,6 @@
 'use client';
-import { useEffect, useState, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect, useState, useCallback, useRef, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { walletApi } from '@/lib/api';
 import BottomNav from '@/components/BottomNav';
@@ -55,9 +55,50 @@ const SOURCE_LABELS: Record<string, string> = {
   wallet_topup: 'Wallet Top-Up',
 };
 
-export default function WalletPage() {
+// ── Success Animation Component ────────────────────────────────────────
+function PaymentSuccessOverlay({ amount, onDone }: { amount: string; onDone: () => void }) {
+  useEffect(() => {
+    const timer = setTimeout(onDone, 3500);
+    return () => clearTimeout(timer);
+  }, [onDone]);
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fadeIn">
+      <div className="bg-white rounded-3xl p-8 mx-6 max-w-sm w-full text-center animate-scaleIn editorial-shadow">
+        {/* Animated checkmark */}
+        <div className="w-20 h-20 mx-auto mb-5 rounded-full bg-green-100 flex items-center justify-center animate-bounceIn">
+          <svg className="w-10 h-10 text-green-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M5 13l4 4L19 7" className="animate-checkDraw" style={{ strokeDasharray: 24, strokeDashoffset: 24 }} />
+          </svg>
+        </div>
+        <h3 className="font-headline font-black text-2xl uppercase tracking-tight text-ink">Payment Successful!</h3>
+        <p className="font-mono text-4xl font-bold text-green-600 mt-3">+₹{amount}</p>
+        <p className="font-body text-sm text-on-surface-variant mt-2">Added to your StudEX wallet</p>
+        <div className="mt-5 flex gap-2 justify-center">
+          <span className="w-2 h-2 rounded-full bg-amber animate-pulse" style={{ animationDelay: '0ms' }} />
+          <span className="w-2 h-2 rounded-full bg-amber animate-pulse" style={{ animationDelay: '150ms' }} />
+          <span className="w-2 h-2 rounded-full bg-amber animate-pulse" style={{ animationDelay: '300ms' }} />
+        </div>
+      </div>
+
+      <style jsx>{`
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes scaleIn { from { transform: scale(0.7); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+        @keyframes bounceIn { 0% { transform: scale(0); } 60% { transform: scale(1.15); } 100% { transform: scale(1); } }
+        @keyframes checkDraw { to { stroke-dashoffset: 0; } }
+        .animate-fadeIn { animation: fadeIn 0.3s ease-out forwards; }
+        .animate-scaleIn { animation: scaleIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
+        .animate-bounceIn { animation: bounceIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 0.2s both; }
+        .animate-checkDraw { animation: checkDraw 0.5s ease-out 0.5s forwards; }
+      `}</style>
+    </div>
+  );
+}
+
+function WalletPageContent() {
   const { token, loading, firebaseUser, walletBalance, refreshWallet } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [wallet, setWallet] = useState<WalletData | null>(null);
   const [txns, setTxns] = useState<Transaction[]>([]);
   const [fetching, setFetching] = useState(true);
@@ -66,6 +107,9 @@ export default function WalletPage() {
   const [topupMsg, setTopupMsg] = useState('');
   const [topupError, setTopupError] = useState('');
   const [showTopup, setShowTopup] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
+  const [successAmount, setSuccessAmount] = useState('');
+  const pendingOrderRef = useRef<{ order_id: string; amount: string } | null>(null);
 
   useEffect(() => {
     if (!loading && !firebaseUser) router.push('/login');
@@ -91,6 +135,41 @@ export default function WalletPage() {
 
   useEffect(() => { load(); }, [load]);
 
+  // ── Handle redirect-back from Cashfree (UPI/netbanking redirect flows) ──
+  useEffect(() => {
+    const orderId = searchParams.get('order_id');
+    if (!orderId || !token) return;
+
+    // Clean URL immediately
+    const url = new URL(window.location.href);
+    url.searchParams.delete('order_id');
+    window.history.replaceState({}, '', url.pathname);
+
+    // Verify the payment
+    const verifyRedirectPayment = async () => {
+      setToppingUp(true);
+      setTopupMsg('Verifying your payment...');
+      try {
+        await walletApi.verifyCashfreePayment(token, { order_id: orderId });
+        setTopupMsg('');
+        setSuccessAmount(pendingOrderRef.current?.amount || '');
+        setShowSuccess(true);
+        setShowTopup(false);
+        setTopupAmount('');
+        await load();
+      } catch {
+        // Payment might still be processing or failed — just refresh
+        setTopupMsg('');
+        await load();
+      } finally {
+        setToppingUp(false);
+        pendingOrderRef.current = null;
+      }
+    };
+
+    verifyRedirectPayment();
+  }, [searchParams, token, load]);
+
   const loadCashfreeScript = () => new Promise<void>((resolve, reject) => {
     if ((window as any).Cashfree) return resolve();
     const script = document.createElement('script');
@@ -112,46 +191,64 @@ export default function WalletPage() {
       await loadCashfreeScript();
 
       // 1. Create order on backend
-      const res = await walletApi.createCashfreeOrder(token, { amount: parseFloat(topupAmount) }) as { data: { order: { order_id: string; payment_session_id: string; payment_mode: string } } };
+      const res = await walletApi.createCashfreeOrder(token, { amount: parseFloat(topupAmount) }) as {
+        data: { order: { order_id: string; payment_session_id: string; payment_mode: string } }
+      };
       const order = res.data.order;
+
+      // Store order details in case of redirect
+      pendingOrderRef.current = { order_id: order.order_id, amount: topupAmount };
 
       // 2. Initialize Cashfree checkout (mode comes from backend to avoid env mismatch)
       const cashfree = await (window as any).Cashfree({
         mode: order.payment_mode || 'production',
       });
 
+      setTopupMsg('Opening payment window...');
+
       const checkoutOptions = {
         paymentSessionId: order.payment_session_id,
         redirectTarget: '_modal',
       };
 
-      cashfree.checkout(checkoutOptions).then(async (result: any) => {
-        try {
-          if (result.error) {
-            setTopupError(result.error.message || 'Payment failed');
-            setToppingUp(false);
-            return;
-          }
+      // 3. Open checkout
+      const result = await cashfree.checkout(checkoutOptions);
 
-          if (result.paymentDetails) {
-            setTopupMsg('Verifying payment...');
-            await walletApi.verifyCashfreePayment(token, {
-              order_id: order.order_id,
-            });
-            setTopupMsg(`Payment successful! ₹${topupAmount} added to your personal wallet.`);
-            setTopupAmount('');
-            setShowTopup(false);
-            await load();
-          }
-        } catch (err: any) {
-          setTopupError(err.message || 'Payment verification failed');
-        } finally {
-          setToppingUp(false);
-        }
-      });
+      // 4. Handle result (fires for modal-based payments like cards)
+      if (result.error) {
+        // Payment was cancelled or failed in modal
+        setTopupError(result.error.message || 'Payment was cancelled.');
+        setToppingUp(false);
+        setTopupMsg('');
+        return;
+      }
+
+      // Payment completed (or redirect happened) — verify on backend
+      setTopupMsg('Verifying payment...');
+      try {
+        await walletApi.verifyCashfreePayment(token, { order_id: order.order_id });
+        // Show success animation
+        setTopupMsg('');
+        setTopupError('');
+        setSuccessAmount(topupAmount);
+        setShowSuccess(true);
+        setShowTopup(false);
+        setTopupAmount('');
+        await load();
+      } catch (verifyErr: any) {
+        setTopupError(verifyErr.message || 'Payment verification failed. If money was debited, it will be refunded.');
+      } finally {
+        setToppingUp(false);
+        pendingOrderRef.current = null;
+      }
     } catch (err: unknown) {
-      setTopupError(err instanceof Error ? err.message : 'Failed to initialize payment gateway.');
+      const msg = err instanceof Error ? err.message : 'Failed to initialize payment gateway.';
+      // Don't show error if user just dismissed the modal
+      if (!msg.includes('popup closed') && !msg.includes('user cancelled')) {
+        setTopupError(msg);
+      }
       setToppingUp(false);
+      setTopupMsg('');
     }
   };
 
@@ -165,6 +262,14 @@ export default function WalletPage() {
 
   return (
     <div className="min-h-screen bg-[#F7F4EF] pb-28">
+      {/* Success Animation Overlay */}
+      {showSuccess && (
+        <PaymentSuccessOverlay
+          amount={successAmount}
+          onDone={() => setShowSuccess(false)}
+        />
+      )}
+
       {/* Header */}
       <header className="bg-[#F7F4EF] sticky top-0 z-40 flex justify-between items-center px-6 py-4">
         <button onClick={() => router.back()} className="text-ink">
@@ -203,7 +308,10 @@ export default function WalletPage() {
           <h2 className="font-headline font-bold text-xl uppercase tracking-tight text-ink">Top Up Wallet</h2>
 
           {topupMsg && (
-            <div className="bg-green-50 border border-green-200 rounded-xl p-3 font-body text-sm text-green-700">{topupMsg}</div>
+            <div className="bg-amber/10 border border-amber/30 rounded-xl p-3 font-body text-sm text-ink flex items-center gap-2">
+              <span className="material-symbols-outlined text-amber text-lg animate-spin">progress_activity</span>
+              {topupMsg}
+            </div>
           )}
           {topupError && (
             <div className="bg-error-container border border-tertiary/20 rounded-xl p-3 font-body text-sm text-tertiary">{topupError}</div>
@@ -230,6 +338,7 @@ export default function WalletPage() {
                   placeholder="₹ 100"
                   className="w-full px-4 py-4 bg-surface-container-high rounded-xl font-mono text-2xl text-ink outline-none focus:ring-2 focus:ring-amber"
                   required
+                  disabled={toppingUp}
                 />
               </div>
               <div className="flex gap-2">
@@ -237,8 +346,9 @@ export default function WalletPage() {
                   <button
                     key={amt}
                     type="button"
+                    disabled={toppingUp}
                     onClick={() => setTopupAmount(String(amt))}
-                    className={`flex-1 py-2 rounded-lg font-mono text-xs font-bold snappy ${topupAmount === String(amt) ? 'bg-amber text-ink' : 'bg-surface-container-high text-muted hover:bg-amber/20'}`}
+                    className={`flex-1 py-2 rounded-lg font-mono text-xs font-bold snappy ${topupAmount === String(amt) ? 'bg-amber text-ink' : 'bg-surface-container-high text-muted hover:bg-amber/20'} disabled:opacity-50`}
                   >
                     ₹{amt}
                   </button>
@@ -247,8 +357,9 @@ export default function WalletPage() {
               <div className="flex gap-3">
                 <button
                   type="button"
+                  disabled={toppingUp}
                   onClick={() => { setShowTopup(false); setTopupAmount(''); setTopupError(''); setTopupMsg(''); }}
-                  className="flex-1 py-4 rounded-xl font-headline font-bold text-sm uppercase tracking-wider bg-surface-container-high text-muted snappy hover:bg-surface-container-highest"
+                  className="flex-1 py-4 rounded-xl font-headline font-bold text-sm uppercase tracking-wider bg-surface-container-high text-muted snappy hover:bg-surface-container-highest disabled:opacity-50"
                 >
                   Cancel
                 </button>
@@ -305,5 +416,17 @@ export default function WalletPage() {
 
       <BottomNav />
     </div>
+  );
+}
+
+export default function WalletPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-[#F7F4EF] flex items-center justify-center">
+        <div className="font-headline font-black text-4xl tracking-tighter text-ink animate-pulse">STUDEX</div>
+      </div>
+    }>
+      <WalletPageContent />
+    </Suspense>
   );
 }
