@@ -54,7 +54,7 @@ function formatDate(ts: unknown) {
 }
 
 export default function DealDetailPage() {
-  const { token, loading, firebaseUser } = useAuth();
+  const { token, loading, firebaseUser, walletBalance, refreshWallet } = useAuth();
   const router = useRouter();
   const params = useParams();
   const id = params?.id as string;
@@ -64,6 +64,12 @@ export default function DealDetailPage() {
   const [redeeming, setRedeeming] = useState(false);
   const [redeemResult, setRedeemResult] = useState<{ qrToken?: string; message?: string } | null>(null);
   const [error, setError] = useState('');
+  // Wallet payment state
+  const [vendorCode, setVendorCode] = useState('');
+  const [payAmount, setPayAmount] = useState('');
+  const [paying, setPaying] = useState(false);
+  const [paySuccess, setPaySuccess] = useState('');
+  const [payError, setPayError] = useState('');
 
   useEffect(() => {
     if (!loading && !firebaseUser) router.push('/login');
@@ -94,6 +100,29 @@ export default function DealDetailPage() {
       setError(err instanceof Error ? err.message : 'Failed to redeem deal.');
     } finally {
       setRedeeming(false);
+    }
+  };
+
+  const handleWalletPay = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!token) return;
+    setPaying(true);
+    setPayError('');
+    setPaySuccess('');
+    try {
+      const res = await redemptionApi.payVendor(token, {
+        dealId: id,
+        vendorCode,
+        amount: parseFloat(payAmount),
+      }) as { message: string };
+      setPaySuccess(res.message || `Payment of ₹${payAmount} successful!`);
+      setVendorCode('');
+      setPayAmount('');
+      if (refreshWallet) await refreshWallet();
+    } catch (err: unknown) {
+      setPayError(err instanceof Error ? err.message : 'Payment failed.');
+    } finally {
+      setPaying(false);
     }
   };
 
@@ -197,6 +226,59 @@ export default function DealDetailPage() {
               </div>
             )}
           </div>
+        )}
+
+        {/* Pay from Wallet */}
+        {redeemResult && (
+          <section className="mb-8 bg-surface-container-lowest editorial-shadow p-6 rounded-2xl space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-headline font-bold text-lg uppercase tracking-tight text-ink">Pay from Wallet</h3>
+              <span className="font-mono text-xs bg-amber/20 text-amber px-3 py-1 rounded-full font-bold">₹{walletBalance.toFixed(2)}</span>
+            </div>
+
+            {paySuccess && (
+              <div className="bg-green-50 border border-green-200 rounded-xl p-3 font-body text-sm text-green-700 flex items-center gap-2">
+                <span className="material-symbols-outlined text-green-600 text-lg">check_circle</span>
+                {paySuccess}
+              </div>
+            )}
+            {payError && (
+              <div className="bg-error-container border border-tertiary/20 rounded-xl p-3 font-body text-sm text-tertiary">{payError}</div>
+            )}
+
+            <form onSubmit={handleWalletPay} className="space-y-3">
+              <input
+                type="text"
+                value={vendorCode}
+                onChange={e => setVendorCode(e.target.value)}
+                placeholder="Enter vendor code"
+                className="w-full px-4 py-3 bg-surface-container-high rounded-xl font-mono text-sm text-ink outline-none focus:ring-2 focus:ring-amber"
+                required
+                disabled={paying}
+              />
+              <input
+                type="number"
+                min="1"
+                step="0.01"
+                value={payAmount}
+                onChange={e => setPayAmount(e.target.value)}
+                placeholder="Amount (₹)"
+                className="w-full px-4 py-3 bg-surface-container-high rounded-xl font-mono text-sm text-ink outline-none focus:ring-2 focus:ring-amber"
+                required
+                disabled={paying}
+              />
+              <button
+                type="submit"
+                disabled={paying || !vendorCode || !payAmount || parseFloat(payAmount) <= 0 || parseFloat(payAmount) > walletBalance}
+                className="w-full bg-ink text-white py-4 rounded-xl font-headline font-bold text-sm uppercase tracking-wider snappy hover:bg-charcoal editorial-shadow disabled:opacity-50"
+              >
+                {paying ? 'Processing...' : `Pay ₹${payAmount || '0'} from Wallet`}
+              </button>
+              {payAmount && parseFloat(payAmount) > walletBalance && (
+                <p className="font-body text-xs text-tertiary text-center">Insufficient balance. <button type="button" onClick={() => router.push('/wallet')} className="text-amber font-bold underline">Add funds →</button></p>
+              )}
+            </form>
+          </section>
         )}
 
         {/* Offer Card — Voucher Style */}
