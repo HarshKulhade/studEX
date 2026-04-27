@@ -91,12 +91,12 @@ export default function WalletPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  const loadRazorpayScript = () => new Promise<void>((resolve, reject) => {
-    if ((window as any).Razorpay) return resolve();
+  const loadCashfreeScript = () => new Promise<void>((resolve, reject) => {
+    if ((window as any).Cashfree) return resolve();
     const script = document.createElement('script');
-    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+    script.src = 'https://sdk.cashfree.com/js/v3/cashfree.js';
     script.onload = () => resolve();
-    script.onerror = () => reject(new Error('Failed to load Razorpay SDK.'));
+    script.onerror = () => reject(new Error('Failed to load Cashfree SDK.'));
     document.body.appendChild(script);
   });
 
@@ -108,62 +108,47 @@ export default function WalletPage() {
     setToppingUp(true);
     try {
       setTopupMsg('Initializing secure payment gateway...');
-      
-      await loadRazorpayScript();
 
-      // 1. Create order
-      const res = await walletApi.createRazorpayOrder(token, { amount: parseFloat(topupAmount) }) as { data: { order: any } };
+      await loadCashfreeScript();
+
+      // 1. Create order on backend
+      const res = await walletApi.createCashfreeOrder(token, { amount: parseFloat(topupAmount) }) as { data: { order: { order_id: string; payment_session_id: string } } };
       const order = res.data.order;
 
-      // 2. Configure checkout
-      const options = {
-        key: 'rzp_test_SepIrqG3GFUyNo', // In production, move to NEXT_PUBLIC_RAZORPAY_KEY vars
-        amount: order.amount,
-        currency: order.currency,
-        name: 'StudEX',
-        description: 'Wallet Top Up',
-        order_id: order.id,
-        handler: async function (response: any) {
-          try {
+      // 2. Initialize Cashfree checkout
+      const cashfree = await (window as any).Cashfree({
+        mode: process.env.NEXT_PUBLIC_CASHFREE_ENV === 'PRODUCTION' ? 'production' : 'sandbox',
+      });
+
+      const checkoutOptions = {
+        paymentSessionId: order.payment_session_id,
+        redirectTarget: '_modal',
+      };
+
+      cashfree.checkout(checkoutOptions).then(async (result: any) => {
+        try {
+          if (result.error) {
+            setTopupError(result.error.message || 'Payment failed');
+            setToppingUp(false);
+            return;
+          }
+
+          if (result.paymentDetails) {
             setTopupMsg('Verifying payment...');
-            await walletApi.verifyRazorpayPayment(token, {
-              razorpay_order_id: response.razorpay_order_id,
-              razorpay_payment_id: response.razorpay_payment_id,
-              razorpay_signature: response.razorpay_signature,
-              amount: parseFloat(topupAmount)
+            await walletApi.verifyCashfreePayment(token, {
+              order_id: order.order_id,
             });
             setTopupMsg(`Payment successful! ₹${topupAmount} added to your personal wallet.`);
             setTopupAmount('');
             setShowTopup(false);
-            await load(); // refreshes transactions + updates global walletBalance
-          } catch (err: any) {
-            setTopupError(err.message || 'Payment verification failed');
-          } finally {
-            setToppingUp(false);
+            await load();
           }
-        },
-        prefill: {
-          name: firebaseUser?.displayName || 'Student',
-          email: firebaseUser?.email || '',
-        },
-        theme: {
-          color: '#e8a020',
-        },
-        modal: {
-          ondismiss: function() {
-            setToppingUp(false);
-            setTopupMsg('');
-          }
+        } catch (err: any) {
+          setTopupError(err.message || 'Payment verification failed');
+        } finally {
+          setToppingUp(false);
         }
-      };
-
-      const razorpay = new (window as any).Razorpay(options);
-      razorpay.on('payment.failed', function (response: any) {
-        setTopupError(response.error.description || 'Payment Failed');
-        setToppingUp(false);
       });
-      
-      razorpay.open();
     } catch (err: unknown) {
       setTopupError(err instanceof Error ? err.message : 'Failed to initialize payment gateway.');
       setToppingUp(false);
@@ -217,24 +202,66 @@ export default function WalletPage() {
         <section className="bg-surface-container-lowest editorial-shadow p-6 rounded-2xl space-y-4">
           <h2 className="font-headline font-bold text-xl uppercase tracking-tight text-ink">Top Up Wallet</h2>
 
-          <div className="bg-amber/10 border border-amber/20 rounded-xl p-4 flex items-start gap-3">
-            <span className="material-symbols-outlined text-amber text-2xl flex-shrink-0 mt-0.5">construction</span>
-            <div>
-              <p className="font-body font-bold text-sm text-ink">Payment Gateway Under Development</p>
-              <p className="font-body text-xs text-on-surface-variant mt-1">
-                The wallet top-up functionality is currently being integrated with our secure payment partner. 
-                In the meantime, please use the <strong>Pay at Counter</strong> option when redeeming deals.
-              </p>
-            </div>
-          </div>
+          {topupMsg && (
+            <div className="bg-green-50 border border-green-200 rounded-xl p-3 font-body text-sm text-green-700">{topupMsg}</div>
+          )}
+          {topupError && (
+            <div className="bg-error-container border border-tertiary/20 rounded-xl p-3 font-body text-sm text-tertiary">{topupError}</div>
+          )}
 
-          <button
-            disabled
-            className="w-full flex items-center justify-center gap-2 p-4 bg-surface-container-high rounded-xl font-body font-bold text-sm text-muted cursor-not-allowed opacity-50"
-          >
-            <span className="material-symbols-outlined text-base">lock</span>
-            Add Money — Coming Soon
-          </button>
+          {!showTopup ? (
+            <button
+              onClick={() => setShowTopup(true)}
+              className="w-full flex items-center justify-center gap-2 p-4 bg-ink text-white rounded-xl font-headline font-bold text-sm uppercase tracking-wider snappy hover:bg-charcoal editorial-shadow"
+            >
+              <span className="material-symbols-outlined text-base">add</span>
+              Add Money
+            </button>
+          ) : (
+            <form onSubmit={handleAddMoney} className="space-y-4">
+              <div>
+                <label className="font-mono text-[10px] uppercase tracking-widest text-muted block mb-2">Enter Amount (₹)</label>
+                <input
+                  type="number"
+                  min="10"
+                  step="1"
+                  value={topupAmount}
+                  onChange={e => setTopupAmount(e.target.value)}
+                  placeholder="₹ 100"
+                  className="w-full px-4 py-4 bg-surface-container-high rounded-xl font-mono text-2xl text-ink outline-none focus:ring-2 focus:ring-amber"
+                  required
+                />
+              </div>
+              <div className="flex gap-2">
+                {[100, 200, 500, 1000].map(amt => (
+                  <button
+                    key={amt}
+                    type="button"
+                    onClick={() => setTopupAmount(String(amt))}
+                    className={`flex-1 py-2 rounded-lg font-mono text-xs font-bold snappy ${topupAmount === String(amt) ? 'bg-amber text-ink' : 'bg-surface-container-high text-muted hover:bg-amber/20'}`}
+                  >
+                    ₹{amt}
+                  </button>
+                ))}
+              </div>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => { setShowTopup(false); setTopupAmount(''); setTopupError(''); setTopupMsg(''); }}
+                  className="flex-1 py-4 rounded-xl font-headline font-bold text-sm uppercase tracking-wider bg-surface-container-high text-muted snappy hover:bg-surface-container-highest"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={toppingUp || !topupAmount || parseFloat(topupAmount) < 10}
+                  className="flex-[2] py-4 rounded-xl font-headline font-bold text-sm uppercase tracking-wider bg-ink text-white snappy hover:bg-charcoal editorial-shadow disabled:opacity-50"
+                >
+                  {toppingUp ? 'Processing...' : `Pay ₹${topupAmount || '0'}`}
+                </button>
+              </div>
+            </form>
+          )}
         </section>
 
         {/* Transaction History */}

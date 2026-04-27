@@ -37,3 +37,4 @@ yarn-error.log*
 
 # ─── Old/duplicate frontend inside backend ─────
 backend/frontend/
+APIKey.csv

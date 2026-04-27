@@ -183,8 +183,8 @@ export default function DashboardPage() {
                   <p className="font-mono text-base font-bold text-white">₹{(data?.wallet?.totalWithdrawn ?? 0).toFixed(2)}</p>
                 </div>
               </div>
-              <Link href="/wallet" className="mt-4 inline-flex items-center gap-2 bg-white/20 text-white/60 px-5 py-2 rounded-full font-headline font-bold text-xs uppercase snappy cursor-default">
-                <span className="material-symbols-outlined text-sm">construction</span> Top-up Coming Soon
+              <Link href="/wallet" className="mt-4 inline-flex items-center gap-2 bg-white/20 hover:bg-white/30 text-white px-5 py-2 rounded-full font-headline font-bold text-xs uppercase snappy">
+                <span className="material-symbols-outlined text-sm">add</span> Add Funds
               </Link>
             </div>
           </div>

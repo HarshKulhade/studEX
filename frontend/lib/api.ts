@@ -162,15 +162,11 @@ export const walletApi = {
   setUpi: (token: string, upiId: string) =>
     apiFetch('/api/wallet/set-upi', { method: 'POST', body: JSON.stringify({ upiId }) }, token),
 
-  createRazorpayOrder: (token: string, body: { amount: number }) =>
-    apiFetch('/api/wallet/create-razorpay-order', { method: 'POST', body: JSON.stringify(body) }, token),
+  createCashfreeOrder: (token: string, body: { amount: number }) =>
+    apiFetch('/api/wallet/create-cashfree-order', { method: 'POST', body: JSON.stringify(body) }, token),
 
-  verifyRazorpayPayment: (token: string, body: {
-    razorpay_order_id: string;
-    razorpay_payment_id: string;
-    razorpay_signature: string;
-    amount: number;
-  }) => apiFetch('/api/wallet/verify-payment', { method: 'POST', body: JSON.stringify(body) }, token),
+  verifyCashfreePayment: (token: string, body: { order_id: string }) =>
+    apiFetch('/api/wallet/verify-payment', { method: 'POST', body: JSON.stringify(body) }, token),
 };
 
 // ── Opportunities ─────────────────────────────────────────────────────────

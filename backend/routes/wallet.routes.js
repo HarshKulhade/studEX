@@ -9,8 +9,8 @@ const {
   getTransactions,
   withdrawFromWallet,
   setUpiId,
-  createRazorpayOrder,
-  verifyRazorpayPayment,
+  createCashfreeOrder,
+  verifyCashfreePayment,
 } = require('../controllers/wallet.controller');
 const validate = require('../middleware/validate');
 
@@ -29,7 +29,6 @@ router.post(
     body('amount')
       .notEmpty().withMessage('amount is required')
       .isFloat({ min: 10 }).withMessage('Minimum withdrawal amount is ₹10'),
-
     body('upiId')
       .notEmpty().withMessage('UPI ID is required')
       .matches(/^[\w.\-]{3,}@[a-zA-Z]{3,}$/)
@@ -51,27 +50,25 @@ router.post(
   validate,
   setUpiId
 );
-// POST /api/wallet/create-razorpay-order
+
+// POST /api/wallet/create-cashfree-order
 router.post(
-  '/create-razorpay-order',
+  '/create-cashfree-order',
   [
     body('amount').notEmpty().withMessage('amount is required').isFloat({ min: 10 }).withMessage('Minimum top-up is ₹10'),
   ],
   validate,
-  createRazorpayOrder
+  createCashfreeOrder
 );
 
 // POST /api/wallet/verify-payment
 router.post(
   '/verify-payment',
   [
-    body('razorpay_order_id').notEmpty(),
-    body('razorpay_payment_id').notEmpty(),
-    body('razorpay_signature').notEmpty(),
-    body('amount').notEmpty(),
+    body('order_id').notEmpty().withMessage('order_id is required'),
   ],
   validate,
-  verifyRazorpayPayment
+  verifyCashfreePayment
 );
 
 module.exports = router;

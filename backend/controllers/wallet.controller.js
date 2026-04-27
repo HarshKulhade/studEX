@@ -3,17 +3,19 @@
 const CashbackWallet = require('../models/CashbackWallet');
 const Transaction = require('../models/Transaction');
 const ApiResponse = require('../utils/ApiResponse');
-const Razorpay = require('razorpay');
+const { Cashfree, CFEnvironment } = require('cashfree-pg');
 const crypto = require('crypto');
 
-let razorpay;
-if (process.env.RAZORPAY_KEY_ID && process.env.RAZORPAY_KEY_SECRET) {
-  razorpay = new Razorpay({
-    key_id: process.env.RAZORPAY_KEY_ID,
-    key_secret: process.env.RAZORPAY_KEY_SECRET,
-  });
+// ── Cashfree PG Initialization ──────────────────────────────────────────
+let cashfree = null;
+if (process.env.CASHFREE_APP_ID && process.env.CASHFREE_SECRET_KEY) {
+  const cfEnv = process.env.CASHFREE_ENV === 'PRODUCTION'
+    ? CFEnvironment.PRODUCTION
+    : CFEnvironment.SANDBOX;
+  cashfree = new Cashfree(cfEnv, process.env.CASHFREE_APP_ID, process.env.CASHFREE_SECRET_KEY);
+  console.log(`[Cashfree] Initialized in ${process.env.CASHFREE_ENV} mode`);
 } else {
-  console.warn('[WARNING] Razorpay keys (RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET) are missing. Razorpay features will be disabled.');
+  console.warn('[WARNING] Cashfree keys (CASHFREE_APP_ID, CASHFREE_SECRET_KEY) are missing. Payment features will be disabled.');
 }
 
 // ─────────────────────────────────────────────────
@@ -158,11 +160,11 @@ const setUpiId = async (req, res, next) => {
 };
 
 // ─────────────────────────────────────────────────
-//  POST /api/wallet/create-razorpay-order
+//  POST /api/wallet/create-cashfree-order
 // ─────────────────────────────────────────────────
-const createRazorpayOrder = async (req, res, next) => {
+const createCashfreeOrder = async (req, res, next) => {
   try {
-    if (!razorpay) {
+    if (!cashfree) {
       return ApiResponse.error(res, 503, 'Payment gateway is currently unavailable.');
     }
 
@@ -171,19 +173,63 @@ const createRazorpayOrder = async (req, res, next) => {
       return ApiResponse.error(res, 400, 'Minimum top-up amount is ₹10.');
     }
 
-    const options = {
-      amount: parseInt(amount * 100), // amount in the smallest currency unit (paise)
-      currency: 'INR',
-      receipt: `rw_${req.user._id.toString().slice(-6)}_${Date.now()}`,
+    // Cashfree requires customer_id to be alphanumeric (plus underscores/hyphens).
+    // Firestore doc IDs can be user names with spaces, so we sanitize here.
+    const rawId = req.user._id.toString();
+    const sanitizedId = rawId.replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 50);
+
+    // Cashfree requires a valid 10-digit Indian phone number
+    const rawPhone = (req.user.phone || '').replace(/\D/g, '');
+    const customerPhone = rawPhone.length === 10 ? rawPhone
+      : rawPhone.length === 12 && rawPhone.startsWith('91') ? rawPhone.slice(2)
+      : '9999999999';
+
+    const orderId = `studex_${sanitizedId.slice(-6)}_${Date.now()}`;
+
+    const orderRequest = {
+      order_amount: parseFloat(amount),
+      order_currency: 'INR',
+      order_id: orderId,
+      customer_details: {
+        customer_id: sanitizedId,
+        customer_name: (req.user.name || 'Student').substring(0, 100),
+        customer_email: req.user.email || 'student@studex.app',
+        customer_phone: customerPhone,
+      },
+      order_meta: {
+        return_url: (() => {
+          const urls = (process.env.CLIENT_URL || '').split(',').map(u => u.trim()).filter(Boolean);
+          // Cashfree production requires HTTPS — pick the first https URL
+          const httpsUrl = urls.find(u => u.startsWith('https://')) || urls[0] || 'https://studexedu.vercel.app';
+          return `${httpsUrl}/wallet?order_id=${orderId}`;
+        })(),
+      },
     };
 
-    const order = await razorpay.orders.create(options);
-    if (!order) {
-      return ApiResponse.error(res, 500, 'Error creating Razorpay order');
+    console.log('[Cashfree] Creating order:', JSON.stringify(orderRequest, null, 2));
+
+    const response = await cashfree.PGCreateOrder(orderRequest);
+
+    if (!response || !response.data) {
+      return ApiResponse.error(res, 500, 'Error creating Cashfree order');
     }
 
-    return ApiResponse.success(res, 200, 'Razorpay order created', { order });
+    return ApiResponse.success(res, 200, 'Cashfree order created', {
+      order: {
+        order_id: response.data.order_id,
+        payment_session_id: response.data.payment_session_id,
+        order_amount: response.data.order_amount,
+        order_currency: response.data.order_currency,
+      },
+    });
   } catch (err) {
+    // Log detailed Cashfree error for debugging
+    if (err.response) {
+      console.error('[Cashfree] API Error:', JSON.stringify(err.response.data, null, 2));
+      console.error('[Cashfree] Status:', err.response.status);
+      const cfMessage = err.response.data?.message || err.response.data?.error?.message || err.message;
+      return ApiResponse.error(res, err.response.status || 400, `Payment gateway error: ${cfMessage}`);
+    }
     next(err);
   }
 };
@@ -191,20 +237,49 @@ const createRazorpayOrder = async (req, res, next) => {
 // ─────────────────────────────────────────────────
 //  POST /api/wallet/verify-payment
 // ─────────────────────────────────────────────────
-const verifyRazorpayPayment = async (req, res, next) => {
+const verifyCashfreePayment = async (req, res, next) => {
   try {
-    const { razorpay_order_id, razorpay_payment_id, razorpay_signature, amount } = req.body;
+    if (!cashfree) {
+      return ApiResponse.error(res, 503, 'Payment gateway is currently unavailable.');
+    }
 
-    const bodyText = razorpay_order_id + '|' + razorpay_payment_id;
-    const expectedSignature = crypto
-      .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
-      .update(bodyText.toString())
-      .digest('hex');
+    const { order_id } = req.body;
 
-    const isAuthentic = expectedSignature === razorpay_signature;
+    if (!order_id) {
+      return ApiResponse.error(res, 400, 'order_id is required.');
+    }
 
-    if (!isAuthentic) {
-      return ApiResponse.error(res, 400, 'Invalid payment signature.');
+    // Fetch the order status from Cashfree
+    const response = await cashfree.PGOrderFetchPayments(order_id);
+
+    if (!response || !response.data || response.data.length === 0) {
+      return ApiResponse.error(res, 400, 'No payments found for this order.');
+    }
+
+    // Find a successful payment
+    const successfulPayment = response.data.find(
+      (p) => p.payment_status === 'SUCCESS'
+    );
+
+    if (!successfulPayment) {
+      return ApiResponse.error(res, 400, 'Payment not completed or failed.');
+    }
+
+    const paidAmount = parseFloat(successfulPayment.payment_amount);
+    const paymentId = successfulPayment.cf_payment_id;
+
+    // Check if this payment was already credited (idempotency)
+    // Transaction model uses Firestore — use find() and filter in JS
+    const existingTxns = await Transaction.find({
+      student: req.user._id,
+      source: 'wallet_topup',
+    });
+    const alreadyCredited = existingTxns.some(
+      (t) => t.description && t.description.includes(paymentId.toString())
+    );
+
+    if (alreadyCredited) {
+      return ApiResponse.success(res, 200, 'Payment already verified and credited.');
     }
 
     let wallet = await CashbackWallet.findOne({ student: req.user._id });
@@ -212,23 +287,30 @@ const verifyRazorpayPayment = async (req, res, next) => {
       wallet = await CashbackWallet.create({ student: req.user._id });
     }
 
-    wallet.balance += parseFloat(amount);
-    wallet.totalEarned += parseFloat(amount); // Reusing totalEarned to represent total added funds
+    wallet.balance += paidAmount;
+    wallet.totalEarned += paidAmount;
     await CashbackWallet.save(wallet);
 
     await Transaction.create({
       wallet: wallet._id,
       student: req.user._id,
       type: 'credit',
-      amount: parseFloat(amount),
+      amount: paidAmount,
       source: 'wallet_topup',
-      description: `Wallet Top-Up via Razorpay (Payment ID: ${razorpay_payment_id})`,
+      description: `Wallet Top-Up via Cashfree (Payment ID: ${paymentId})`,
     });
 
     return ApiResponse.success(res, 200, 'Payment verified and wallet credited successfully');
   } catch (err) {
+    // Log detailed Cashfree error for debugging
+    if (err.response) {
+      console.error('[Cashfree] Verify Error:', JSON.stringify(err.response.data, null, 2));
+      console.error('[Cashfree] Status:', err.response.status);
+      const cfMessage = err.response.data?.message || err.response.data?.error?.message || err.message;
+      return ApiResponse.error(res, err.response.status || 400, `Payment verification error: ${cfMessage}`);
+    }
     next(err);
   }
 };
 
-module.exports = { getWallet, getTransactions, withdrawFromWallet, setUpiId, createRazorpayOrder, verifyRazorpayPayment };
+module.exports = { getWallet, getTransactions, withdrawFromWallet, setUpiId, createCashfreeOrder, verifyCashfreePayment };
