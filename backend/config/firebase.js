@@ -10,8 +10,14 @@ try {
     let serviceAccount;
 
     if (process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
+      let keyString = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
+      // If it doesn't look like JSON, assume it's base64 encoded to avoid JSON escaping issues
+      if (!keyString.trim().startsWith('{')) {
+        keyString = Buffer.from(keyString, 'base64').toString('utf8');
+      }
+      
       // Env-var path: parse JSON and fix escaped newlines in private_key
-      serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY);
+      serviceAccount = JSON.parse(keyString);
       if (serviceAccount.private_key) {
         serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n');
       }
