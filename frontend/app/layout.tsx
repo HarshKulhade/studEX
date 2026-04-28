@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import { AuthProvider } from '@/context/AuthContext';
+import DesktopWarning from '@/components/DesktopWarning';
 
 export const metadata: Metadata = {
   title: 'StudEX — The Student Broadsheet',
@@ -47,6 +48,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         {/* Grain overlay for paper tactility */}
         <div className="grain-overlay" aria-hidden="true" />
+        <DesktopWarning />
         <AuthProvider>
           {children}
         </AuthProvider>

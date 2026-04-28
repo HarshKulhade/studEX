@@ -306,8 +306,11 @@ const payAtCounter = async (req, res, next) => {
     deal.redeemedCount = (deal.redeemedCount || 0) + 1;
     await Deal.save(deal);
 
-    // 4. Update vendor analytics (optional, but good for tracking)
+    // 4. Update vendor analytics (deducting 5% StudEX commission)
+    const commission = payAmount * 0.05;
+    const netPayable = payAmount - commission;
     vendor.totalSales = (vendor.totalSales || 0) + payAmount;
+    vendor.pendingPayable = (vendor.pendingPayable || 0) + netPayable;
     await Vendor.save(vendor);
 
     return ApiResponse.success(res, 200, `Payment of ₹${payAmount.toFixed(2)} recorded successfully!`, {
@@ -316,6 +319,8 @@ const payAtCounter = async (req, res, next) => {
       cashbackAmount: redemption.cashbackAmount,
       vendorName: vendor.businessName,
       amountPaid: payAmount,
+      studexCut: commission,
+      vendorPayable: netPayable,
     });
   } catch (err) {
     next(err);
