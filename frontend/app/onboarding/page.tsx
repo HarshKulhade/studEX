@@ -100,6 +100,14 @@ export default function OnboardingPage() {
             <span className="hidden md:block font-mono text-xs font-medium text-outline">SECURE_CHANNEL_V2.0</span>
           </div>
         </section>
+
+        {/* Credit */}
+        <div className="text-center pt-4 pb-8">
+          <p className="font-mono text-[11px] text-muted uppercase tracking-widest">
+            Created by <span className="font-bold text-ink">Harsh Kulhade</span> &amp; Team{' '}
+            <span className="font-bold text-primary-container">Logic Legends</span>
+          </p>
+        </div>
       </main>
 
       {/* Footer Action Bar */}
